@@ -15,14 +15,18 @@ Apoc execution IDs refer to durable local command receipts and their output.
 | G: self-host | `cargo xtask native-test` ran an actual one-process server, scheduled a fixture watch, and read canonical history JSONL from SQLite. | Passed |
 | H: managed | Real Cron, Queue, Worker, and remote D1 after migration 0002 produced `hacker-news:22238335`; history remained isolated from a second tenant. `01a09ce9-f188-76c3-bedf-313fd8ef372e`. | Passed |
 
-The complete local gate passed at `01a09cf0-b92f-73a1-9358-435051fe204a`,
+The complete local gate passed at `01a09d01-6258-7442-af1c-951c1ee20c87`,
 including strict Clippy, tests, cargo-deny, cargo-machete, architecture, complexity,
 source conformance, ten required WASM builds, and native/local-Worker runtime tests.
 This includes atomic notification batches, migration upgrade/reopen, lease recovery,
 retry exhaustion, source metrics, and error-class preservation. SQLite delivery
 tests passed 11 cases; D1 shared-SQL tests passed 13 cases. Sender fixtures verified
 batch preservation, idempotency headers, and transport-error redaction.
-GitHub-hosted CI is a separate acceptance surface; no hosted CI result is implied.
+GitHub-hosted CI is a separate acceptance surface. Its first clean Ubuntu run
+passed the source checks but exposed a harness deadline that included a cold
+Worker release build. The harness now builds before starting Wrangler, so the
+60-second deadline measures server readiness. No hosted pass is implied until
+the corrected revision completes its own run.
 
 ## Managed deployment
 

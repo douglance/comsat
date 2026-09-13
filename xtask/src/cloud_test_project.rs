@@ -35,6 +35,20 @@ impl CloudTestProject {
         log_tail(&self.log)
     }
 
+    pub fn build_worker(&self, root: &Path) -> Result<()> {
+        let status = Command::new(self.cargo_tools.join("bin").join("worker-build"))
+            .args(["--release", "crates/comsat-cloud"])
+            .current_dir(root)
+            .env("CARGO_PROFILE_RELEASE_STRIP", "debuginfo")
+            .env("PATH", tool_path(self))
+            .status()?;
+        if status.success() {
+            Ok(())
+        } else {
+            Err(format!("Worker release build exited with {status}").into())
+        }
+    }
+
     pub fn ensure_worker_build(&self) -> Result<()> {
         if self.installed_worker_build_matches()? {
             return Ok(());
@@ -220,7 +234,6 @@ fn wrangler_command(root: &Path, project: &CloudTestProject) -> Command {
 fn wrangler_config(root: &Path) -> String {
     let main = root.join("crates/comsat-cloud/build/worker/shim.mjs");
     let migrations = root.join("migrations");
-    let workspace = shell_quote(root);
     format!(
         r#"{{
   "$schema": "node_modules/wrangler/config-schema.json",
@@ -242,8 +255,7 @@ fn wrangler_config(root: &Path) -> String {
     "producers": [{{"binding": "COMSAT_WATCH_QUEUE", "queue": "comsat-watch-runs"}}],
     "consumers": [{{"queue": "comsat-watch-runs", "max_batch_size": 5}}]
   }},
-  "triggers": {{"crons": ["*/5 * * * *"]}},
-  "build": {{"command": "cd {workspace} && CARGO_PROFILE_RELEASE_STRIP=debuginfo worker-build --release crates/comsat-cloud"}}
+  "triggers": {{"crons": ["*/5 * * * *"]}}
 }}
 "#,
         json_escape_path(&main),
@@ -302,9 +314,4 @@ fn json_escape_path(path: &Path) -> String {
     path.to_string_lossy()
         .replace('\\', "\\\\")
         .replace('"', "\\\"")
-}
-
-fn shell_quote(path: &Path) -> String {
-    let value = path.to_string_lossy().replace('\'', "'\\''");
-    format!("'{value}'")
 }

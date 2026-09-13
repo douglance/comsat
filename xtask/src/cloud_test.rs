@@ -18,6 +18,7 @@ pub fn run(root: &Path) -> Result<()> {
     let tokens = TestTokens::new();
     let project = CloudTestProject::write(root, temp.path(), &tokens)?;
     project.ensure_worker_build()?;
+    project.build_worker(root)?;
     init_d1(root, &project)?;
 
     let port = free_port()?;
