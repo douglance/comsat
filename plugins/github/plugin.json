@@ -1,0 +1,14 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "comsat-github",
+  "version": "0.1.0",
+  "extensions": {
+    "io.comsat.source": {
+      "version": 1,
+      "id": "github",
+      "displayName": "GitHub",
+      "supportsFetch": true,
+      "supportsFollow": true
+    }
+  }
+}

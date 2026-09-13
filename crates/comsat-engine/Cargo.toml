@@ -1,0 +1,20 @@
+[package]
+name = "comsat-engine"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+async-trait = "0.1"
+comsat-source = { path = "../comsat-source" }
+comsat-types = { path = "../comsat-types" }
+futures = { workspace = true }
+incurs = { workspace = true, default-features = false }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tokio-util = { workspace = true }
+
+[lints]
+workspace = true

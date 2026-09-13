@@ -1,0 +1,8 @@
+**/target/
+**/build/
+**/.wrangler/
+**/node_modules/
+.dev.vars*
+*.sqlite*
+.env*
+/artifacts/

@@ -1,0 +1,14 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "comsat-hacker-news",
+  "version": "0.1.0",
+  "extensions": {
+    "io.comsat.source": {
+      "version": 1,
+      "id": "hacker-news",
+      "displayName": "Hacker News",
+      "supportsFetch": true,
+      "supportsFollow": true
+    }
+  }
+}

@@ -1,0 +1,60 @@
+[workspace]
+resolver = "3"
+members = ["crates/*", "plugins/*", "xtask"]
+default-members = ["crates/comsat-cli"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.98"
+license = "MIT"
+repository = "https://github.com/douglance/comsat"
+
+[workspace.dependencies]
+comsat-types = { path = "crates/comsat-types" }
+comsat-source = { path = "crates/comsat-source" }
+comsat-engine = { path = "crates/comsat-engine" }
+comsat-app = { path = "crates/comsat-app" }
+comsat-store = { path = "crates/comsat-store" }
+comsat-store-sqlite = { path = "crates/comsat-store-sqlite" }
+comsat-github = { path = "plugins/github" }
+comsat-hacker-news = { path = "plugins/hacker-news" }
+comsat-web = { path = "plugins/web" }
+comsat-stack-exchange = { path = "plugins/stack-exchange" }
+incurs = { git = "https://github.com/douglance/incurs", rev = "40d88b60aade47f844bcdcb56c5f507b7123bc6c", default-features = false }
+incurs-codemode = { git = "https://github.com/douglance/incurs", rev = "40d88b60aade47f844bcdcb56c5f507b7123bc6c" }
+incurs-codemode-local = { git = "https://github.com/douglance/incurs", rev = "40d88b60aade47f844bcdcb56c5f507b7123bc6c" }
+incurs-mcp-cloudflare = { git = "https://github.com/douglance/incurs", rev = "40d88b60aade47f844bcdcb56c5f507b7123bc6c" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+schemars = "1"
+thiserror = "2"
+url = { version = "2", features = ["serde"] }
+time = { version = "0.3", features = ["parsing", "formatting"] }
+futures = "0.3"
+async-trait = "0.1"
+async-stream = "0.3"
+tokio = { version = "1", default-features = false, features = ["sync", "macros"] }
+tokio-util = { version = "0.7", features = ["rt"] }
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json", "stream", "gzip", "deflate"] }
+rusqlite = { version = "0.37", features = ["bundled"] }
+worker = { version = "0.8.5", features = ["d1", "queue"] }
+http = "1"
+percent-encoding = "2"
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+
+[workspace.lints.clippy]
+all = { level = "warn", priority = -1 }
+pedantic = { level = "warn", priority = -1 }
+nursery = { level = "warn", priority = -1 }
+# Public contracts are documented at module boundaries; trivial accessors omit sections.
+missing_errors_doc = "allow"
+missing_panics_doc = "allow"
+must_use_candidate = "allow"
+
+[profile.release]
+lto = true
+codegen-units = 1
+strip = true

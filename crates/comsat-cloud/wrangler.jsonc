@@ -1,0 +1,45 @@
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "comsat-cloud",
+  "main": "build/worker/shim.mjs",
+  "compatibility_date": "2026-09-13",
+  "account_id": "88f9cbf5c4f4e217079bcbf0ca6cb181",
+  "workers_dev": true,
+  "observability": {
+    "enabled": true
+  },
+  "vars": {
+    "MCP_ALLOWED_ORIGINS": "",
+    "WATCH_LEASE_SECONDS": "300",
+    "WATCH_CLAIM_LIMIT": "12"
+  },
+  "d1_databases": [
+    {
+      "binding": "COMSAT_DB",
+      "database_name": "comsat",
+      "database_id": "1521142f-6b39-468d-bab0-6879470f17e3",
+      "migrations_dir": "../../migrations"
+    }
+  ],
+  "queues": {
+    "producers": [
+      {
+        "binding": "COMSAT_WATCH_QUEUE",
+        "queue": "comsat-watch-runs"
+      }
+    ],
+    "consumers": [
+      {
+        "queue": "comsat-watch-runs",
+        "max_batch_size": 1,
+        "max_batch_timeout": 30
+      }
+    ]
+  },
+  "triggers": {
+    "crons": ["*/5 * * * *"]
+  },
+  "build": {
+    "command": "CARGO_PROFILE_RELEASE_STRIP=debuginfo worker-build --release crates/comsat-cloud"
+  }
+}

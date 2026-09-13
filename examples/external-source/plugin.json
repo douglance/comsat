@@ -1,0 +1,15 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "description": "Fixture COMSAT source implemented as an Incurs MCP Agent Plugin.",
+  "extensions": {
+    "io.comsat.source": {
+      "displayName": "Fixture Source",
+      "id": "fixture-source",
+      "supportsFetch": true,
+      "supportsFollow": true,
+      "version": 1
+    }
+  },
+  "name": "comsat-fixture-source",
+  "version": "0.1.0"
+}

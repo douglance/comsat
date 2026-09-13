@@ -1,0 +1,27 @@
+[package]
+name = "comsat-web"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+comsat-source = { path = "../../crates/comsat-source" }
+comsat-types = { path = "../../crates/comsat-types" }
+async-stream.workspace = true
+async-trait = "0.1"
+http = "1"
+percent-encoding = "2"
+serde.workspace = true
+serde_json.workspace = true
+time.workspace = true
+url = "2"
+
+[dev-dependencies]
+futures.workspace = true
+incurs = { workspace = true, features = ["agent-plugins"] }
+tokio.workspace = true
+
+[lints]
+workspace = true

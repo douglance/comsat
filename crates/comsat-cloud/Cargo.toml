@@ -1,0 +1,39 @@
+[package]
+name = "comsat-cloud"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+async-trait.workspace = true
+comsat-app = { path = "../comsat-app", default-features = false }
+comsat-engine.workspace = true
+comsat-github.workspace = true
+comsat-hacker-news.workspace = true
+comsat-source.workspace = true
+comsat-stack-exchange.workspace = true
+comsat-store.workspace = true
+comsat-types.workspace = true
+comsat-web.workspace = true
+futures.workspace = true
+http.workspace = true
+incurs.workspace = true
+incurs-mcp-cloudflare.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+worker = { version = "0.8.5", features = ["d1", "queue"] }
+
+[dev-dependencies]
+serde_json.workspace = true
+
+[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
+rusqlite.workspace = true
+
+[lints]
+workspace = true
