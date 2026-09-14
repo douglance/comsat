@@ -40,7 +40,7 @@ pub fn landing_page() -> Result<Response> {
     let mut response = Response::from_html(crate::landing::HTML)?;
     response
         .headers_mut()
-        .set("Cache-Control", "public, max-age=300")?;
+        .set("Cache-Control", "public, max-age=60, must-revalidate")?;
     response
         .headers_mut()
         .set("X-Content-Type-Options", "nosniff")?;
