@@ -103,6 +103,12 @@ search returning only `repository` records, and GitHub Discussions reporting a
 structured `authentication` diagnostic with exit code 3 because the managed
 deployment has no GitHub token configured.
 
+The managed watch pipeline was re-proven on this build: a watch created through
+the authenticated HTTP surface was claimed by Cron, executed through the Queue,
+and persisted two Hacker News records to remote D1, readable through
+`/history?watch=…`, with the watch rescheduled an hour out. The proof watch was
+deleted afterwards and no watch remains active.
+
 ## MCP 2025-11-25 tool contracts
 
 The adapter previously serialized annotation hints with snake_case keys such as
