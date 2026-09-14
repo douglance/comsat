@@ -7,7 +7,10 @@ mod http;
 mod runtime;
 
 pub use command::{SourceCommand, source_commands};
-pub use conformance::{ConformanceError, ConformanceReport, ConformanceSuite};
+pub use conformance::{
+    CancellationFixture, ConformanceError, ConformanceFixtures, ConformanceReport,
+    ConformanceSuite, SourceErrorFixture,
+};
 pub use descriptor::{OperationKind, SourceCommandNames, SourceDescriptor, SourceProfile};
 pub use http::HttpClient;
 pub use runtime::{RecordStream, SourceRunContext, SourceRuntime};

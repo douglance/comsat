@@ -30,7 +30,7 @@ native and WASM checks.
 | `proc-macro2`, `quote` | Preserve syntax locations and inspect parsed Rust tokens in quality checks |
 | `toml` | Parse Cargo manifests for dependency-boundary enforcement |
 
-Incurs is pinned to Git revision `40d88b60aade47f844bcdcb56c5f507b7123bc6c`.
+Incurs is pinned to Git revision `8b1a6c400b2eb65ee379e099c1d7bd96525f536a`.
 The lockfile pins the complete application dependency resolution. Native SQLite,
 network clients, and Cloudflare bindings are excluded from runtime-neutral type
 contracts. The Cloudflare crate uses SQLite only in native development tests to

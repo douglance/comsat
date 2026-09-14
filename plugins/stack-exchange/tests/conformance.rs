@@ -1,8 +1,11 @@
 use std::sync::{Arc, Mutex};
 
-use comsat_source::{ConformanceSuite, HttpClient, SourceRunContext, SourceRuntime};
+use comsat_source::{
+    CancellationFixture, ConformanceFixtures, ConformanceSuite, HttpClient, SourceErrorFixture,
+    SourceRunContext, SourceRuntime,
+};
 use comsat_stack_exchange::StackExchangeSource;
-use comsat_types::{Query, SourceId, Target};
+use comsat_types::{ErrorClass, Query, SourceId, Target};
 use futures::StreamExt;
 use http::{Request, Response};
 use incurs::agent_plugin::loader::{AgentPluginLoadOptions, load_agent_plugin};
@@ -21,8 +24,13 @@ fn stack_exchange_manifest_loads_through_incurs() {
 
 #[derive(Default)]
 struct MockHttp {
-    responses: Mutex<Vec<Response<Vec<u8>>>>,
+    responses: Mutex<Vec<MockResponse>>,
     requests: Mutex<Vec<String>>,
+}
+
+enum MockResponse {
+    Response(Response<Vec<u8>>),
+    Pending,
 }
 
 #[tokio::test]
@@ -97,19 +105,26 @@ impl MockHttp {
     }
 
     fn with_statuses(responses: Vec<(u16, &'static str)>) -> Self {
+        Self::with_statuses_and_pending(responses, false)
+    }
+
+    fn with_statuses_and_pending(responses: Vec<(u16, &'static str)>, pending: bool) -> Self {
+        let pending = pending.then_some(MockResponse::Pending);
+        let responses = responses
+            .into_iter()
+            .map(|body| {
+                MockResponse::Response(
+                    Response::builder()
+                        .status(body.0)
+                        .body(body.1.as_bytes().to_vec())
+                        .unwrap(),
+                )
+            })
+            .chain(pending)
+            .rev()
+            .collect();
         Self {
-            responses: Mutex::new(
-                responses
-                    .into_iter()
-                    .rev()
-                    .map(|body| {
-                        Response::builder()
-                            .status(body.0)
-                            .body(body.1.as_bytes().to_vec())
-                            .unwrap()
-                    })
-                    .collect(),
-            ),
+            responses: Mutex::new(responses),
             requests: Mutex::default(),
         }
     }
@@ -129,13 +144,17 @@ impl HttpClient for MockHttp {
             .lock()
             .unwrap()
             .push(request.uri().to_string());
-        self.responses.lock().unwrap().pop().ok_or_else(|| {
+        let response = self.responses.lock().unwrap().pop().ok_or_else(|| {
             comsat_types::SourceError::new(
                 SourceId::new("stack-exchange").unwrap(),
                 comsat_types::ErrorClass::Internal,
                 "missing mock response",
             )
-        })
+        })?;
+        match response {
+            MockResponse::Response(response) => Ok(response),
+            MockResponse::Pending => std::future::pending().await,
+        }
     }
 }
 
@@ -206,12 +225,31 @@ async fn stack_exchange_encodes_site_and_api_key_query_values() {
 
 #[tokio::test]
 async fn stack_exchange_source_conforms_with_fixtures() {
-    let http = Arc::new(MockHttp::new(vec![
-        r#"{"items":[{"question_id":481,"link":"https://stackoverflow.com/questions/481/example","title":"How do I use MCP?","body":"Question body","owner":{"display_name":"Dana","user_id":44},"creation_date":1767225600,"last_activity_date":1767229200,"score":5,"answer_count":1,"is_answered":true,"tags":["rust","mcp"]}]}"#,
-        r#"{"items":[{"question_id":481,"link":"https://stackoverflow.com/questions/481/example","title":"How do I use MCP?","body":"Question body","owner":{"display_name":"Dana","user_id":44},"creation_date":1767225600,"last_activity_date":1767229200,"score":5,"answer_count":1,"is_answered":true,"tags":["rust","mcp"]}]}"#,
-        r#"{"items":[{"question_id":481,"link":"https://stackoverflow.com/questions/481/example","title":"How do I use MCP?","body":"Question body","owner":{"display_name":"Dana","user_id":44},"creation_date":1767225600,"last_activity_date":1767229200,"score":5,"answer_count":1,"is_answered":true,"tags":["rust","mcp"]}]}"#,
-        r#"{"items":[{"answer_id":482,"question_id":481,"link":"https://stackoverflow.com/a/482","body":"Answer body","owner":{"display_name":"Alex","user_id":45},"creation_date":1767230000,"last_activity_date":1767230000,"score":3,"is_accepted":true}]}"#,
-    ]));
+    let http = Arc::new(MockHttp::with_statuses_and_pending(
+        vec![
+            (
+                200,
+                r#"{"items":[{"question_id":481,"link":"https://stackoverflow.com/questions/481/example","title":"How do I use MCP?","body":"Question body","owner":{"display_name":"Dana","user_id":44},"creation_date":1767225600,"last_activity_date":1767229200,"score":5,"answer_count":1,"is_answered":true,"tags":["rust","mcp"]}]}"#,
+            ),
+            (
+                200,
+                r#"{"items":[{"question_id":481,"link":"https://stackoverflow.com/questions/481/example","title":"How do I use MCP?","body":"Question body","owner":{"display_name":"Dana","user_id":44},"creation_date":1767225600,"last_activity_date":1767229200,"score":5,"answer_count":1,"is_answered":true,"tags":["rust","mcp"]}]}"#,
+            ),
+            (
+                200,
+                r#"{"items":[{"question_id":481,"link":"https://stackoverflow.com/questions/481/example","title":"How do I use MCP?","body":"Question body","owner":{"display_name":"Dana","user_id":44},"creation_date":1767225600,"last_activity_date":1767229200,"score":5,"answer_count":1,"is_answered":true,"tags":["rust","mcp"]}]}"#,
+            ),
+            (
+                200,
+                r#"{"items":[{"answer_id":482,"question_id":481,"link":"https://stackoverflow.com/a/482","body":"Answer body","owner":{"display_name":"Alex","user_id":45},"creation_date":1767230000,"last_activity_date":1767230000,"score":3,"is_accepted":true}]}"#,
+            ),
+            (
+                200,
+                r#"{"error_id":400,"error_name":"bad_parameter","error_message":"bad parameter"}"#,
+            ),
+        ],
+        true,
+    ));
     let source: Arc<dyn SourceRuntime> = Arc::new(StackExchangeSource::new(http, None, None));
     let query = Query {
         text: "MCP".into(),
@@ -225,11 +263,24 @@ async fn stack_exchange_source_conforms_with_fixtures() {
     };
 
     let report = ConformanceSuite::new(StackExchangeSource::descriptor())
-        .run(source, query, Some(target))
+        .run_with_fixtures(
+            source,
+            ConformanceFixtures {
+                query: query.clone(),
+                target: Some(target),
+                error: Some(SourceErrorFixture {
+                    query: query.clone(),
+                    expected_class: ErrorClass::InvalidQuery,
+                }),
+                cancellation: Some(CancellationFixture { query }),
+            },
+        )
         .await
         .unwrap();
 
     assert!(report.search_checked);
     assert!(report.fetch_checked);
     assert!(report.follow_checked);
+    assert!(report.error_checked);
+    assert!(report.cancellation_checked);
 }

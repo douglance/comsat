@@ -1,19 +1,50 @@
 use std::collections::BTreeMap;
+use std::future::Future;
 use std::sync::Arc;
+use std::task::Poll;
 
-use comsat_types::{Query, Record, RecordId, SourceError, Target};
+use comsat_types::{ErrorClass, Query, Record, RecordId, SourceError, Target};
+use futures::FutureExt;
 use incurs::cli::Cli;
-use incurs::tool::{ToolCallOptions, ToolCallOutcome, ToolCatalog};
+use incurs::tool::{ToolCallControl, ToolCallOptions, ToolCallOutcome, ToolCatalog};
 use thiserror::Error;
 
 use crate::{OperationKind, SourceDescriptor, SourceRuntime, source_commands};
 
+mod cancellation;
+mod schema;
+
+use cancellation::{RequestLedger, observe_runtime};
+use schema::validate_schema_document;
+
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[allow(
+    clippy::struct_excessive_bools,
+    reason = "conformance reports expose independent check coverage flags"
+)]
 pub struct ConformanceReport {
     pub source_id: String,
     pub search_checked: bool,
     pub fetch_checked: bool,
     pub follow_checked: bool,
+    pub error_checked: bool,
+    pub cancellation_checked: bool,
+}
+
+pub struct ConformanceFixtures {
+    pub query: Query,
+    pub target: Option<Target>,
+    pub error: Option<SourceErrorFixture>,
+    pub cancellation: Option<CancellationFixture>,
+}
+
+pub struct SourceErrorFixture {
+    pub query: Query,
+    pub expected_class: ErrorClass,
+}
+
+pub struct CancellationFixture {
+    pub query: Query,
 }
 
 #[derive(Debug, Error)]
@@ -22,12 +53,29 @@ pub enum ConformanceError {
     MissingSearch,
     #[error("missing tool: {0}")]
     MissingTool(String),
+    #[error("invalid tool schema for {tool}: {reason}")]
+    InvalidToolSchema { tool: String, reason: String },
     #[error("invalid fixture: {0}")]
     InvalidFixture(String),
     #[error("search fixture emitted no records")]
     EmptySearch,
     #[error("record ids changed between repeat search runs")]
     UnstableRecordIds,
+    #[error("source error code is not a COMSAT error class: {0}")]
+    UnstructuredSourceError(String),
+    #[error("expected source error class {expected:?}, got {actual:?}")]
+    UnexpectedErrorClass {
+        expected: ErrorClass,
+        actual: ErrorClass,
+    },
+    #[error("cancellation fixture completed before cancellation was observed")]
+    CancellationFinishedEarly,
+    #[error("cancellation was not propagated through the ToolCatalog")]
+    CancellationNotPropagated,
+    #[error("cancelled call never reached the source request")]
+    CancellationNotObserved,
+    #[error("cancelled call left {0} source request(s) pending")]
+    CancellationLeakedRequest(usize),
     #[error("source returned an error: {0}")]
     Source(#[from] SourceError),
     #[error("tool call failed: {0}")]
@@ -50,27 +98,52 @@ impl ConformanceSuite {
         query: Query,
         target: Option<Target>,
     ) -> Result<ConformanceReport, ConformanceError> {
+        self.run_with_fixtures(
+            runtime,
+            ConformanceFixtures {
+                query,
+                target,
+                error: None,
+                cancellation: None,
+            },
+        )
+        .await
+    }
+
+    pub async fn run_with_fixtures(
+        &self,
+        runtime: Arc<dyn SourceRuntime>,
+        fixtures: ConformanceFixtures,
+    ) -> Result<ConformanceReport, ConformanceError> {
         if !self.descriptor.profile.search {
             return Err(ConformanceError::MissingSearch);
         }
-        validate_fixtures(&query, target.as_ref())?;
-        let catalog = self.catalog(runtime)?;
+        validate_fixtures(&fixtures)?;
+        let ledger = Arc::new(RequestLedger::default());
+        let catalog = self.catalog(observe_runtime(runtime, Arc::clone(&ledger)))?;
         self.require_tool(&catalog, OperationKind::Search)?;
-        let first = self.search_records(&catalog, &query).await?;
-        let second = self.search_records(&catalog, &query).await?;
+        let first = self.search_records(&catalog, &fixtures.query).await?;
+        let second = self.search_records(&catalog, &fixtures.query).await?;
         if first.is_empty() {
             return Err(ConformanceError::EmptySearch);
         }
         if record_ids(&first) != record_ids(&second) {
             return Err(ConformanceError::UnstableRecordIds);
         }
-        let (fetch_checked, follow_checked) =
-            self.check_target_operations(&catalog, target).await?;
+        let (fetch_checked, follow_checked) = self
+            .check_target_operations(&catalog, fixtures.target)
+            .await?;
+        let error_checked = self.check_error(&catalog, fixtures.error).await?;
+        let cancellation_checked = self
+            .check_cancellation(&catalog, fixtures.cancellation, &ledger)
+            .await?;
         Ok(ConformanceReport {
             source_id: self.descriptor.id.as_str().to_owned(),
             search_checked: true,
             fetch_checked,
             follow_checked,
+            error_checked,
+            cancellation_checked,
         })
     }
 
@@ -94,6 +167,10 @@ impl ConformanceSuite {
             .ok_or_else(|| ConformanceError::MissingTool(name.to_owned()))?;
         if definition.input_schema.is_null() || definition.output_schema.is_none() {
             return Err(ConformanceError::MissingTool(name.to_owned()));
+        }
+        validate_schema_document(name, &definition.input_schema)?;
+        if let Some(output_schema) = &definition.output_schema {
+            validate_schema_document(name, output_schema)?;
         }
         Ok(())
     }
@@ -170,14 +247,72 @@ impl ConformanceSuite {
         }
         Ok(true)
     }
+
+    async fn check_error(
+        &self,
+        catalog: &ToolCatalog,
+        fixture: Option<SourceErrorFixture>,
+    ) -> Result<bool, ConformanceError> {
+        let Some(fixture) = fixture else {
+            return Ok(false);
+        };
+        call_expected_error(
+            catalog,
+            self.tool(OperationKind::Search)?,
+            query_arguments(&fixture.query),
+            fixture.expected_class,
+        )
+        .await?;
+        Ok(true)
+    }
+
+    async fn check_cancellation(
+        &self,
+        catalog: &ToolCatalog,
+        fixture: Option<CancellationFixture>,
+        ledger: &RequestLedger,
+    ) -> Result<bool, ConformanceError> {
+        let Some(fixture) = fixture else {
+            return Ok(false);
+        };
+        let opened = ledger.opened();
+        let live = ledger.live();
+        call_and_cancel(
+            catalog,
+            self.tool(OperationKind::Search)?,
+            query_arguments(&fixture.query),
+        )
+        .await?;
+        if ledger.opened() == opened {
+            return Err(ConformanceError::CancellationNotObserved);
+        }
+        let leaked = ledger.live().saturating_sub(live);
+        if leaked > 0 {
+            return Err(ConformanceError::CancellationLeakedRequest(leaked));
+        }
+        Ok(true)
+    }
 }
 
-fn validate_fixtures(query: &Query, target: Option<&Target>) -> Result<(), ConformanceError> {
-    query
+fn validate_fixtures(fixtures: &ConformanceFixtures) -> Result<(), ConformanceError> {
+    fixtures
+        .query
         .validate()
         .map_err(|error| ConformanceError::InvalidFixture(error.to_string()))?;
-    if let Some(target) = target {
+    if let Some(target) = &fixtures.target {
         target
+            .validate()
+            .map_err(|error| ConformanceError::InvalidFixture(error.to_string()))?;
+    }
+    if let Some(error) = &fixtures.error {
+        error
+            .query
+            .validate()
+            .map_err(|error| ConformanceError::InvalidFixture(error.to_string()))?;
+    }
+    if let Some(cancellation) = &fixtures.cancellation {
+        cancellation
+            .query
             .validate()
             .map_err(|error| ConformanceError::InvalidFixture(error.to_string()))?;
     }
@@ -200,6 +335,66 @@ async fn call_records(
             .collect(),
         ToolCallOutcome::Error { message, .. } => Err(ConformanceError::Tool(message)),
     }
+}
+
+async fn call_expected_error(
+    catalog: &ToolCatalog,
+    tool: &str,
+    arguments: BTreeMap<String, serde_json::Value>,
+    expected_class: ErrorClass,
+) -> Result<(), ConformanceError> {
+    let outcome = catalog
+        .call(tool, arguments, ToolCallOptions::isolated())
+        .await;
+    match outcome {
+        ToolCallOutcome::Error { code, .. } => {
+            let actual = error_class_from_code(&code)?;
+            if actual == expected_class {
+                return Ok(());
+            }
+            Err(ConformanceError::UnexpectedErrorClass {
+                expected: expected_class,
+                actual,
+            })
+        }
+        ToolCallOutcome::Ok { .. } => Err(ConformanceError::Tool(
+            "expected source error fixture to fail".to_string(),
+        )),
+    }
+}
+
+async fn call_and_cancel(
+    catalog: &ToolCatalog,
+    tool: &str,
+    arguments: BTreeMap<String, serde_json::Value>,
+) -> Result<(), ConformanceError> {
+    let control = ToolCallControl::default();
+    let cancellation = control.cancellation.clone();
+    let options = ToolCallOptions {
+        control,
+        ..ToolCallOptions::isolated()
+    };
+    let call = catalog.call(tool, arguments, options);
+    futures::pin_mut!(call);
+    wait_until_pending(&mut call).await?;
+    cancellation.cancel();
+    match call.await {
+        ToolCallOutcome::Error { code, .. } if code == "CANCELLED" => Ok(()),
+        ToolCallOutcome::Error { .. } | ToolCallOutcome::Ok { .. } => {
+            Err(ConformanceError::CancellationNotPropagated)
+        }
+    }
+}
+
+async fn wait_until_pending<F>(future: &mut std::pin::Pin<&mut F>) -> Result<(), ConformanceError>
+where
+    F: Future<Output = ToolCallOutcome>,
+{
+    futures::future::poll_fn(|context| match future.poll_unpin(context) {
+        Poll::Ready(_) => Poll::Ready(Err(ConformanceError::CancellationFinishedEarly)),
+        Poll::Pending => Poll::Ready(Ok(())),
+    })
+    .await
 }
 
 async fn call_record(
@@ -245,3 +440,11 @@ fn validate_record(record: Record) -> Result<Record, ConformanceError> {
 fn record_ids(records: &[Record]) -> Vec<RecordId> {
     records.iter().map(|record| record.id.clone()).collect()
 }
+
+fn error_class_from_code(code: &str) -> Result<ErrorClass, ConformanceError> {
+    serde_json::from_value(serde_json::Value::String(code.to_owned()))
+        .map_err(|_| ConformanceError::UnstructuredSourceError(code.to_owned()))
+}
+
+#[cfg(test)]
+mod tests;

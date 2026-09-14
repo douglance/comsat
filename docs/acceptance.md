@@ -80,12 +80,21 @@ live notification was sent.
 Native Code Mode uses the existing Incurs executor with an in-memory execution
 store. Durable cross-process Code Mode history is not exposed by this release.
 The cloud MCP protocol family is limited to what the pinned Incurs adapter supports.
-That adapter serializes annotation hints with snake_case keys such as
-`read_only_hint`; clients expecting MCP camelCase hints may ignore them. Native
-Code Mode reads the typed catalog directly and its approval policy is tested.
-Correcting the hosted annotation wire format belongs upstream in Incurs.
 HTTP/MCP aggregate responses are bounded and collected by that adapter; native
 JSONL output streams progressively.
+
+## MCP 2025-11-25 tool contracts
+
+The adapter previously serialized annotation hints with snake_case keys such as
+`read_only_hint`, and aggregate output schemas had array roots. Both are corrected
+upstream in Incurs `8b1a6c4` and in the COMSAT schema caller. Deployed Worker
+version `a8b5235f-fef5-4824-a438-5a849f3079be` was probed directly at
+`01a09d4b-be83-7392-a7c7-5b3edbea6f87`: every read-only tool advertises camelCase
+`readOnlyHint` with no snake_case keys, every advertised `outputSchema` has an
+object root with no nested `$schema` and no unresolved local reference, and live
+MCP and HTTP search and fetch returned `hacker-news:22238335` with the requested
+source filter honored. `cargo xtask cloud-test` asserts the same contract against
+a locally built Worker so the gate fails before a deployment can regress it.
 
 Additional release requirements: source conformance for every plugin; cancellation
 and partial failure; strict local quality gate; runtime-neutral WASM checks;

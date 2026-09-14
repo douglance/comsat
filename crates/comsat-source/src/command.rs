@@ -252,10 +252,7 @@ fn input_schema(operation: OperationKind) -> Value {
 
 fn output_schema(operation: OperationKind) -> Value {
     match operation {
-        OperationKind::Search | OperationKind::Follow => serde_json::json!({
-            "type": "array",
-            "items": schema_for::<comsat_types::Record>(),
-        }),
+        OperationKind::Search | OperationKind::Follow => schema_for::<Vec<comsat_types::Record>>(),
         OperationKind::Fetch => schema_for::<comsat_types::Record>(),
     }
 }

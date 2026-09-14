@@ -79,4 +79,4 @@ servers, and registers successful sources in the runtime catalog. Invalid
 plugins are reported as diagnostics without discarding other successfully loaded
 sources.
 
-See `examples/external-source` for a minimal Rust source package. Its source crate pins Incurs to git revision `40d88b60aade47f844bcdcb56c5f507b7123bc6c` so the example does not depend on a sibling checkout.
+See `examples/external-source` for a minimal Rust source package. Its source crate pins Incurs to git revision `8b1a6c400b2eb65ee379e099c1d7bd96525f536a` so the example does not depend on a sibling checkout.

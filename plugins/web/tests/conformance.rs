@@ -1,7 +1,10 @@
 use std::sync::{Arc, Mutex};
 
-use comsat_source::{ConformanceSuite, HttpClient, SourceRunContext, SourceRuntime};
-use comsat_types::{Query, Record, SourceId, Target};
+use comsat_source::{
+    CancellationFixture, ConformanceFixtures, ConformanceSuite, HttpClient, SourceErrorFixture,
+    SourceRunContext, SourceRuntime,
+};
+use comsat_types::{ErrorClass, Query, Record, SourceId, Target};
 use comsat_web::WebSource;
 use futures::StreamExt;
 use http::{Request, Response};
@@ -52,24 +55,39 @@ async fn web_search_preserves_relative_age_only_in_metadata() {
 
 #[derive(Default)]
 struct MockHttp {
-    responses: Mutex<Vec<Response<Vec<u8>>>>,
+    responses: Mutex<Vec<MockResponse>>,
+}
+
+enum MockResponse {
+    Response(Response<Vec<u8>>),
+    Pending,
 }
 
 impl MockHttp {
     fn new(responses: Vec<&'static str>) -> Self {
+        Self::with_statuses_and_pending(
+            responses.into_iter().map(|body| (200, body)).collect(),
+            false,
+        )
+    }
+
+    fn with_statuses_and_pending(responses: Vec<(u16, &'static str)>, pending: bool) -> Self {
+        let pending = pending.then_some(MockResponse::Pending);
+        let responses = responses
+            .into_iter()
+            .map(|(status, body)| {
+                MockResponse::Response(
+                    Response::builder()
+                        .status(status)
+                        .body(body.as_bytes().to_vec())
+                        .unwrap(),
+                )
+            })
+            .chain(pending)
+            .rev()
+            .collect();
         Self {
-            responses: Mutex::new(
-                responses
-                    .into_iter()
-                    .rev()
-                    .map(|body| {
-                        Response::builder()
-                            .status(200)
-                            .body(body.as_bytes().to_vec())
-                            .unwrap()
-                    })
-                    .collect(),
-            ),
+            responses: Mutex::new(responses),
         }
     }
 }
@@ -80,23 +98,40 @@ impl HttpClient for MockHttp {
         &self,
         _request: Request<Vec<u8>>,
     ) -> comsat_source::SourceResult<Response<Vec<u8>>> {
-        self.responses.lock().unwrap().pop().ok_or_else(|| {
+        let response = self.responses.lock().unwrap().pop().ok_or_else(|| {
             comsat_types::SourceError::new(
                 SourceId::new("web").unwrap(),
                 comsat_types::ErrorClass::Internal,
                 "missing mock response",
             )
-        })
+        })?;
+        match response {
+            MockResponse::Response(response) => Ok(response),
+            MockResponse::Pending => std::future::pending().await,
+        }
     }
 }
 
 #[tokio::test]
 async fn web_source_conforms_with_fixtures() {
-    let http = Arc::new(MockHttp::new(vec![
-        r#"{"web":{"results":[{"url":"https://example.com/comsat#top","title":"COMSAT","description":"Composable search","age":"2026-01-01T00:00:00Z","language":"en","family_friendly":true}]}}"#,
-        r#"{"web":{"results":[{"url":"https://example.com/comsat#top","title":"COMSAT","description":"Composable search","age":"2026-01-01T00:00:00Z","language":"en","family_friendly":true}]}}"#,
-        r"<html><title>COMSAT</title><body>Composable search</body></html>",
-    ]));
+    let http = Arc::new(MockHttp::with_statuses_and_pending(
+        vec![
+            (
+                200,
+                r#"{"web":{"results":[{"url":"https://example.com/comsat#top","title":"COMSAT","description":"Composable search","age":"2026-01-01T00:00:00Z","language":"en","family_friendly":true}]}}"#,
+            ),
+            (
+                200,
+                r#"{"web":{"results":[{"url":"https://example.com/comsat#top","title":"COMSAT","description":"Composable search","age":"2026-01-01T00:00:00Z","language":"en","family_friendly":true}]}}"#,
+            ),
+            (
+                200,
+                r"<html><title>COMSAT</title><body>Composable search</body></html>",
+            ),
+            (401, r"{}"),
+        ],
+        true,
+    ));
     let source: Arc<dyn SourceRuntime> = Arc::new(WebSource::new(http, "test-key".into()));
     let query = Query {
         text: "COMSAT".into(),
@@ -123,11 +158,24 @@ async fn web_source_conforms_with_fixtures() {
     };
 
     let report = ConformanceSuite::new(WebSource::descriptor())
-        .run(source, query, Some(target))
+        .run_with_fixtures(
+            source,
+            ConformanceFixtures {
+                query: query.clone(),
+                target: Some(target),
+                error: Some(SourceErrorFixture {
+                    query: query.clone(),
+                    expected_class: ErrorClass::Authentication,
+                }),
+                cancellation: Some(CancellationFixture { query }),
+            },
+        )
         .await
         .unwrap();
 
     assert!(report.search_checked);
     assert!(report.fetch_checked);
     assert!(!report.follow_checked);
+    assert!(report.error_checked);
+    assert!(report.cancellation_checked);
 }

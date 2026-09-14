@@ -30,22 +30,14 @@ pub(super) fn target_input_schema() -> Value {
 }
 
 pub(super) fn record_array_schema() -> Value {
-    json!({
-        "type": "array",
-        "items": record_schema()
-    })
+    schema_for::<Vec<Record>>()
 }
 
 pub(super) fn record_or_source_error_array_schema() -> Value {
-    json!({
-        "type": "array",
-        "items": {
-            "anyOf": [
-                record_schema(),
-                source_error_schema()
-            ]
-        }
-    })
+    let mut schema = record_array_schema();
+    let record_item = std::mem::take(&mut schema["items"]);
+    schema["items"] = json!({"anyOf": [record_item, source_error_schema()]});
+    schema
 }
 
 fn source_error_schema() -> Value {
@@ -138,5 +130,51 @@ fn field(
         alias: None,
         deprecated: false,
         env_name: None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn generated_output_schemas_keep_references_in_their_document() {
+        for schema in [
+            record_schema(),
+            record_array_schema(),
+            record_or_source_error_array_schema(),
+        ] {
+            assert_schema_locations(&schema, &schema, true);
+        }
+    }
+
+    fn assert_schema_locations(root: &Value, value: &Value, is_root: bool) {
+        match value {
+            Value::Object(object) => {
+                assert!(
+                    is_root || !object.contains_key("$schema") || object.contains_key("$id"),
+                    "nested schema dialect without a resource ID: {value}"
+                );
+                if let Some(reference) = object
+                    .get("$ref")
+                    .and_then(Value::as_str)
+                    .and_then(|reference| reference.strip_prefix('#'))
+                {
+                    assert!(
+                        root.pointer(reference).is_some(),
+                        "unresolved schema reference #{reference}"
+                    );
+                }
+                for child in object.values() {
+                    assert_schema_locations(root, child, false);
+                }
+            }
+            Value::Array(items) => {
+                for item in items {
+                    assert_schema_locations(root, item, false);
+                }
+            }
+            _ => {}
+        }
     }
 }

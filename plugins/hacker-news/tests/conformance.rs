@@ -1,8 +1,11 @@
 use std::sync::{Arc, Mutex};
 
 use comsat_hacker_news::HackerNewsSource;
-use comsat_source::{ConformanceSuite, HttpClient, SourceRunContext, SourceRuntime};
-use comsat_types::{Query, SourceId, Target};
+use comsat_source::{
+    CancellationFixture, ConformanceFixtures, ConformanceSuite, HttpClient, SourceErrorFixture,
+    SourceRunContext, SourceRuntime,
+};
+use comsat_types::{ErrorClass, Query, SourceId, Target};
 use futures::StreamExt;
 use http::{Request, Response};
 use incurs::agent_plugin::loader::{AgentPluginLoadOptions, load_agent_plugin};
@@ -21,25 +24,37 @@ fn hacker_news_manifest_loads_through_incurs() {
 
 #[derive(Default)]
 struct MockHttp {
-    responses: Mutex<Vec<Response<Vec<u8>>>>,
+    responses: Mutex<Vec<MockResponse>>,
     requests: Mutex<Vec<String>>,
+}
+
+enum MockResponse {
+    Response(Response<Vec<u8>>),
+    Pending,
 }
 
 impl MockHttp {
     fn new(responses: Vec<&'static str>) -> Self {
+        Self::with_pending(responses, false)
+    }
+
+    fn with_pending(responses: Vec<&'static str>, pending: bool) -> Self {
+        let pending = pending.then_some(MockResponse::Pending);
+        let responses = responses
+            .into_iter()
+            .map(|body| {
+                MockResponse::Response(
+                    Response::builder()
+                        .status(200)
+                        .body(body.as_bytes().to_vec())
+                        .unwrap(),
+                )
+            })
+            .chain(pending)
+            .rev()
+            .collect();
         Self {
-            responses: Mutex::new(
-                responses
-                    .into_iter()
-                    .rev()
-                    .map(|body| {
-                        Response::builder()
-                            .status(200)
-                            .body(body.as_bytes().to_vec())
-                            .unwrap()
-                    })
-                    .collect(),
-            ),
+            responses: Mutex::new(responses),
             requests: Mutex::default(),
         }
     }
@@ -59,13 +74,17 @@ impl HttpClient for MockHttp {
             .lock()
             .unwrap()
             .push(request.uri().to_string());
-        self.responses.lock().unwrap().pop().ok_or_else(|| {
+        let response = self.responses.lock().unwrap().pop().ok_or_else(|| {
             comsat_types::SourceError::new(
                 SourceId::new("hacker-news").unwrap(),
                 comsat_types::ErrorClass::Internal,
                 "missing mock response",
             )
-        })
+        })?;
+        match response {
+            MockResponse::Response(response) => Ok(response),
+            MockResponse::Pending => std::future::pending().await,
+        }
     }
 }
 
@@ -105,13 +124,17 @@ async fn hacker_news_search_uses_algolia_or_tags_and_hn_item_url() {
 
 #[tokio::test]
 async fn hacker_news_source_conforms_with_fixtures() {
-    let http = Arc::new(MockHttp::new(vec![
-        r#"{"hits":[{"_tags":["story","author_pg","story_43192810"],"objectID":"43192810","title":"COMSAT","url":"https://example.com/comsat","author":"pg","created_at":"2026-01-01T00:00:00Z","points":37,"num_comments":1,"story_id":43192810}]}"#,
-        r#"{"hits":[{"_tags":["story","author_pg","story_43192810"],"objectID":"43192810","title":"COMSAT","url":"https://example.com/comsat","author":"pg","created_at":"2026-01-01T00:00:00Z","points":37,"num_comments":1,"story_id":43192810}]}"#,
-        r#"{"id":43192810,"type":"story","by":"pg","time":1767225600,"title":"COMSAT","url":"https://example.com/comsat","score":37,"descendants":1,"kids":[43192811]}"#,
-        r#"{"id":43192810,"type":"story","by":"pg","time":1767225600,"title":"COMSAT","url":"https://example.com/comsat","score":37,"descendants":1,"kids":[43192811]}"#,
-        r#"{"id":43192811,"type":"comment","by":"alice","time":1767229200,"text":"nice","parent":43192810}"#,
-    ]));
+    let http = Arc::new(MockHttp::with_pending(
+        vec![
+            r#"{"hits":[{"_tags":["story","author_pg","story_43192810"],"objectID":"43192810","title":"COMSAT","url":"https://example.com/comsat","author":"pg","created_at":"2026-01-01T00:00:00Z","points":37,"num_comments":1,"story_id":43192810}]}"#,
+            r#"{"hits":[{"_tags":["story","author_pg","story_43192810"],"objectID":"43192810","title":"COMSAT","url":"https://example.com/comsat","author":"pg","created_at":"2026-01-01T00:00:00Z","points":37,"num_comments":1,"story_id":43192810}]}"#,
+            r#"{"id":43192810,"type":"story","by":"pg","time":1767225600,"title":"COMSAT","url":"https://example.com/comsat","score":37,"descendants":1,"kids":[43192811]}"#,
+            r#"{"id":43192810,"type":"story","by":"pg","time":1767225600,"title":"COMSAT","url":"https://example.com/comsat","score":37,"descendants":1,"kids":[43192811]}"#,
+            r#"{"id":43192811,"type":"comment","by":"alice","time":1767229200,"text":"nice","parent":43192810}"#,
+            r"not-json",
+        ],
+        true,
+    ));
     let source: Arc<dyn SourceRuntime> = Arc::new(HackerNewsSource::new(http));
     let query = Query {
         text: "COMSAT".into(),
@@ -125,11 +148,24 @@ async fn hacker_news_source_conforms_with_fixtures() {
     };
 
     let report = ConformanceSuite::new(HackerNewsSource::descriptor())
-        .run(source, query, Some(target))
+        .run_with_fixtures(
+            source,
+            ConformanceFixtures {
+                query: query.clone(),
+                target: Some(target),
+                error: Some(SourceErrorFixture {
+                    query: query.clone(),
+                    expected_class: ErrorClass::Protocol,
+                }),
+                cancellation: Some(CancellationFixture { query }),
+            },
+        )
         .await
         .unwrap();
 
     assert!(report.search_checked);
     assert!(report.fetch_checked);
     assert!(report.follow_checked);
+    assert!(report.error_checked);
+    assert!(report.cancellation_checked);
 }

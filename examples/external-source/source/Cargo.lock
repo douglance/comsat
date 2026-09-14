@@ -645,7 +645,7 @@ dependencies = [
 [[package]]
 name = "incurs"
 version = "0.5.3"
-source = "git+https://github.com/douglance/incurs?rev=40d88b60aade47f844bcdcb56c5f507b7123bc6c#40d88b60aade47f844bcdcb56c5f507b7123bc6c"
+source = "git+https://github.com/douglance/incurs?rev=8b1a6c400b2eb65ee379e099c1d7bd96525f536a#8b1a6c400b2eb65ee379e099c1d7bd96525f536a"
 dependencies = [
  "async-stream",
  "async-trait",
@@ -667,7 +667,7 @@ dependencies = [
 [[package]]
 name = "incurs-macros"
 version = "0.4.0"
-source = "git+https://github.com/douglance/incurs?rev=40d88b60aade47f844bcdcb56c5f507b7123bc6c#40d88b60aade47f844bcdcb56c5f507b7123bc6c"
+source = "git+https://github.com/douglance/incurs?rev=8b1a6c400b2eb65ee379e099c1d7bd96525f536a#8b1a6c400b2eb65ee379e099c1d7bd96525f536a"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -677,7 +677,7 @@ dependencies = [
 [[package]]
 name = "incurs-mcp-protocol"
 version = "0.1.0"
-source = "git+https://github.com/douglance/incurs?rev=40d88b60aade47f844bcdcb56c5f507b7123bc6c#40d88b60aade47f844bcdcb56c5f507b7123bc6c"
+source = "git+https://github.com/douglance/incurs?rev=8b1a6c400b2eb65ee379e099c1d7bd96525f536a#8b1a6c400b2eb65ee379e099c1d7bd96525f536a"
 dependencies = [
  "serde",
  "serde_json",

@@ -79,11 +79,97 @@ fn assert_mcp_tools(client: &HttpClient, token: &str) -> Result<()> {
         &mcp_tools_list(),
     )?;
     assert_success("mcp tools/list", &tools)?;
+    assert_read_only_tool_contracts(&tools.body)?;
     assert_body_contains(&tools.body, "comsat_search")?;
     assert_any_body_contains(
         &tools.body,
         &["comsat_watch_create", "comsat_watch_add", "watch_add"],
     )
+}
+
+fn assert_read_only_tool_contracts(body: &str) -> Result<()> {
+    let value: Value = serde_json::from_str(body)?;
+    let tools = value["result"]["tools"]
+        .as_array()
+        .ok_or("MCP tools/list did not return a tool array")?;
+    for name in [
+        "comsat_search",
+        "comsat_fetch",
+        "comsat_follow",
+        "source_list",
+        "source_inspect",
+        "source_doctor",
+        "source_test",
+        "watch_list",
+        "history",
+    ] {
+        let tool = tools
+            .iter()
+            .find(|tool| tool["name"] == name)
+            .ok_or_else(|| format!("MCP tool `{name}` is missing"))?;
+        if tool["annotations"]["readOnlyHint"] != true {
+            return Err(format!("MCP tool `{name}` lacks its protocol readOnlyHint").into());
+        }
+        let schema = tool
+            .get("outputSchema")
+            .ok_or_else(|| format!("MCP tool `{name}` lacks its output schema"))?;
+        if schema["type"] != "object" {
+            return Err(format!("MCP tool `{name}` has a non-object output schema").into());
+        }
+        assert_schema_locations(schema, schema, true)?;
+    }
+    Ok(())
+}
+
+fn assert_schema_locations(root: &Value, value: &Value, is_root: bool) -> Result<()> {
+    match value {
+        Value::Object(object) => {
+            let root = if object.contains_key("$id") {
+                value
+            } else {
+                root
+            };
+            assert_schema_object(root, object, is_root)?;
+            for child in object.values() {
+                assert_schema_locations(root, child, false)?;
+            }
+        }
+        Value::Array(items) => {
+            for item in items {
+                assert_schema_locations(root, item, false)?;
+            }
+        }
+        _ => {}
+    }
+    Ok(())
+}
+
+fn assert_schema_object(
+    root: &Value,
+    object: &serde_json::Map<String, Value>,
+    is_root: bool,
+) -> Result<()> {
+    if !is_root && object.contains_key("$schema") && !object.contains_key("$id") {
+        return Err("MCP output has a nested dialect outside a schema resource".into());
+    }
+    for key in ["$ref", "$dynamicRef"] {
+        let Some(reference) = object
+            .get(key)
+            .and_then(Value::as_str)
+            .and_then(|reference| reference.strip_prefix('#'))
+        else {
+            continue;
+        };
+        assert_schema_reference(root, reference)?;
+    }
+    Ok(())
+}
+
+fn assert_schema_reference(root: &Value, reference: &str) -> Result<()> {
+    if (reference.is_empty() || reference.starts_with('/')) && root.pointer(reference).is_none() {
+        return Err(format!("MCP output has an unresolved schema reference #{reference}").into());
+    }
+    Ok(())
 }
 
 fn assert_watch_tenant_isolation(
