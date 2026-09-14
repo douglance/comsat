@@ -122,7 +122,8 @@ arguments. Rotate a token by replacing its entry and uploading the updated secre
 | `STACK_EXCHANGE_SITE` | Site selection; defaults to Stack Overflow |
 | `TENANT_WEBHOOKS_JSON` | Optional per-tenant HTTPS notification configuration |
 
-Authenticated endpoints include `/mcp`, `/search`, `/fetch`, `/follow`,
+`GET /` is a public HTML explanation of the Record pipeline and does not require a
+token. Authenticated endpoints include `/mcp`, `/search`, `/fetch`, `/follow`,
 `/watch/add`, `/watch/list`, `/watch/delete`, and `/history`. Tool endpoints accept
 POST JSON arguments. History accepts GET query parameters. `/health` also requires
 authentication. MCP protocol negotiation is supplied by the pinned Incurs adapter.

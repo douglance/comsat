@@ -57,6 +57,22 @@ fn assert_history_and_input_contract(client: &HttpClient, token: &str) -> Result
 }
 
 fn assert_auth_and_origin(client: &HttpClient, token: &str) -> Result<()> {
+    let landing = client.get("/", &[])?;
+    assert_status("public landing", &landing, 200)?;
+    assert_body_contains(&landing.body, "Sources produce canonical records")?;
+    let landing_type = landing
+        .headers
+        .get("content-type")
+        .ok_or("landing response missing content-type")?;
+    if !landing_type.contains("text/html") {
+        return Err(format!("landing content-type was {landing_type}, expected text/html").into());
+    }
+    let cross_origin = client.get(
+        "/",
+        &[("Origin".to_owned(), "http://evil.invalid".to_owned())],
+    )?;
+    assert_status("public landing ignores foreign origin", &cross_origin, 200)?;
+
     let unauthenticated = client.get("/health", &[])?;
     assert_status("unauthenticated health", &unauthenticated, 401)?;
 

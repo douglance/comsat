@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>COMSAT — composable search</title>
+  <meta name="description" content="Sources produce canonical records. Consumers decide what the evidence means.">
+  <link rel="icon" href="data:,">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:ital,wght@0,400;0,500;1,400&family=Newsreader:opsz,wght@6..72,500;6..72,600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --color-bg: #f3eee4;
+      --color-surface: #ece7db;
+      --color-text: #1c1917;
+      --color-muted: #57534e;
+      --color-accent: #b45309;
+      --color-focus: #b45309;
+      --color-success: #3f6212;
+      --color-warning: #a16207;
+      --color-danger: #9f1239;
+      --font-display: "Newsreader", "Iowan Old Style", Palatino, serif;
+      --font-body: "IBM Plex Sans", "Helvetica Neue", sans-serif;
+      --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+      --text-xs: 0.75rem;
+      --leading-xs: 1.35;
+      --text-sm: 1rem;
+      --leading-sm: 1.5;
+      --text-md: 1.0625rem;
+      --leading-md: 1.75;
+      --text-lg: 1.25rem;
+      --leading-lg: 1.45;
+      --text-xl: 1.75rem;
+      --leading-xl: 1.2;
+      --text-2xl: 2.5rem;
+      --leading-2xl: 1.12;
+      --space-1: 0.25rem;
+      --space-2: 0.5rem;
+      --space-3: 0.75rem;
+      --space-4: 1rem;
+      --space-6: 1.5rem;
+      --space-8: 2.5rem;
+      --radius-sm: 0;
+      --radius-md: 0;
+      --radius-lg: 0;
+      --shadow-sm: none;
+      --shadow-md: none;
+      --shadow-lg: none;
+      --duration-fast: 120ms;
+      --duration-base: 180ms;
+      --duration-slow: 280ms;
+      --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+      --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+      --rule: color-mix(in srgb, var(--color-text) 12%, transparent);
+      --page: 72rem;
+    }
+
+    * { box-sizing: border-box; }
+    html { color-scheme: light; }
+    body {
+      margin: 0;
+      background: var(--color-bg);
+      color: var(--color-text);
+      font-family: var(--font-body);
+      font-size: var(--text-sm);
+      line-height: var(--leading-sm);
+      font-optical-sizing: auto;
+    }
+    @media (min-width: 40rem) {
+      body { font-size: var(--text-md); line-height: var(--leading-md); }
+    }
+
+    a { color: inherit; }
+    a:hover { color: var(--color-accent); }
+    a:focus-visible,
+    button:focus-visible {
+      outline: 2px solid var(--color-focus);
+      outline-offset: 2px;
+    }
+
+    .skip {
+      position: absolute;
+      left: var(--space-4);
+      top: -4rem;
+      padding: var(--space-2) var(--space-3);
+      background: var(--color-text);
+      color: var(--color-bg);
+      text-decoration: none;
+      min-height: 44px;
+    }
+    .skip:focus { top: var(--space-4); }
+
+    .shell {
+      width: min(100%, var(--page));
+      margin-inline: auto;
+      padding: var(--space-6);
+    }
+    @media (min-width: 64rem) {
+      .shell { padding: var(--space-8); }
+    }
+
+    .masthead {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: var(--space-4);
+      padding-bottom: var(--space-6);
+      border-bottom: 1px solid var(--rule);
+    }
+    .wordmark {
+      font-family: var(--font-display);
+      font-size: var(--text-xl);
+      font-weight: 600;
+      letter-spacing: -0.02em;
+      text-decoration: none;
+      line-height: var(--leading-xl);
+      text-wrap: balance;
+    }
+    .meta {
+      font-family: var(--font-mono);
+      font-size: var(--text-xs);
+      line-height: var(--leading-xs);
+      color: var(--color-muted);
+      letter-spacing: 0.04em;
+    }
+
+    .page {
+      display: grid;
+      gap: var(--space-8);
+      padding-top: var(--space-8);
+    }
+    @media (min-width: 64rem) {
+      .page {
+        grid-template-columns: minmax(0, 38rem) minmax(22rem, 1fr);
+        align-items: start;
+        column-gap: var(--space-8);
+      }
+      .lede { grid-column: 1; }
+      .downlink {
+        grid-column: 2;
+        grid-row: 1 / span 4;
+        position: sticky;
+        top: var(--space-6);
+      }
+      .how, .use, .limits { grid-column: 1; }
+    }
+
+    h1, h2 {
+      font-family: var(--font-display);
+      font-weight: 600;
+      letter-spacing: -0.03em;
+      text-wrap: balance;
+      margin: 0 0 var(--space-4);
+    }
+    h1 {
+      font-size: var(--text-xl);
+      line-height: var(--leading-xl);
+      max-width: 18ch;
+    }
+    @media (min-width: 40rem) {
+      h1 { font-size: var(--text-2xl); line-height: var(--leading-2xl); }
+    }
+    h2 {
+      font-size: var(--text-lg);
+      line-height: var(--leading-lg);
+    }
+    p { margin: 0 0 var(--space-4); max-width: 56ch; text-wrap: pretty; }
+    .lede p { color: var(--color-muted); }
+
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--space-3);
+      margin-top: var(--space-6);
+    }
+    .actions a {
+      display: inline-flex;
+      align-items: center;
+      min-height: 44px;
+      padding: var(--space-2) var(--space-3);
+      text-decoration: none;
+      font-weight: 500;
+    }
+    .actions a.primary {
+      background: var(--color-text);
+      color: var(--color-bg);
+    }
+    .actions a.primary:hover { background: var(--color-accent); color: var(--color-bg); }
+    .actions a.secondary {
+      color: var(--color-muted);
+      text-decoration: underline;
+      text-underline-offset: 0.2em;
+      padding-inline: 0;
+    }
+
+    .how ol {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+      counter-reset: step;
+      max-width: 56ch;
+    }
+    .how li {
+      counter-increment: step;
+      padding: var(--space-4) 0 var(--space-4) 3rem;
+      border-top: 1px solid var(--rule);
+      position: relative;
+    }
+    .how li:last-child { padding-bottom: 0; }
+    .how li::before {
+      content: counter(step, decimal-leading-zero);
+      position: absolute;
+      left: 0;
+      top: var(--space-4);
+      font-family: var(--font-mono);
+      font-size: var(--text-xs);
+      line-height: var(--leading-xs);
+      color: var(--color-accent);
+      letter-spacing: 0.06em;
+    }
+    .how li p { margin: 0; color: var(--color-muted); }
+    .how li strong {
+      display: block;
+      font-weight: 500;
+      color: var(--color-text);
+      margin-bottom: var(--space-1);
+    }
+
+    .downlink {
+      background: var(--color-surface);
+      padding: var(--space-6);
+      min-width: 0;
+    }
+    .downlink-head {
+      display: grid;
+      gap: var(--space-2);
+      margin-bottom: var(--space-4);
+    }
+    .downlink h2 { margin: 0; font-size: var(--text-lg); white-space: nowrap; }
+    .downlink .caption {
+      font-family: var(--font-mono);
+      font-size: var(--text-xs);
+      line-height: var(--leading-xs);
+      color: var(--color-muted);
+      letter-spacing: 0.04em;
+    }
+    .stages {
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--space-2);
+      margin: 0 0 var(--space-4);
+      padding: 0;
+      list-style: none;
+      font-family: var(--font-mono);
+      font-size: var(--text-xs);
+      line-height: var(--leading-xs);
+      letter-spacing: 0.04em;
+    }
+    .stages li {
+      color: var(--color-muted);
+    }
+    .stages li[aria-current="step"] { color: var(--color-accent); }
+    .stages li:not(:last-child)::after {
+      content: " →";
+      color: var(--rule);
+    }
+    .pair {
+      display: grid;
+      gap: var(--space-4);
+    }
+    .pair h3 {
+      margin: 0 0 var(--space-2);
+      font-family: var(--font-mono);
+      font-size: var(--text-xs);
+      font-weight: 500;
+      line-height: var(--leading-xs);
+      letter-spacing: 0.06em;
+      color: var(--color-muted);
+    }
+    pre {
+      margin: 0;
+      font-family: var(--font-mono);
+      font-size: 0.75rem;
+      line-height: 1.55;
+      overflow-x: auto;
+      white-space: pre;
+      max-width: 100%;
+    }
+    .record .k { color: var(--color-muted); }
+    .record .v { color: var(--color-text); }
+    .record [data-field] { opacity: 0.35; }
+    .record[data-complete] [data-field],
+    .record [data-field].on { opacity: 1; }
+    .replay {
+      margin-top: var(--space-4);
+      min-height: 44px;
+      padding: var(--space-2) 0;
+      border: 0;
+      background: transparent;
+      font-family: var(--font-mono);
+      font-size: var(--text-xs);
+      letter-spacing: 0.06em;
+      color: var(--color-accent);
+      cursor: pointer;
+      text-decoration: underline;
+      text-underline-offset: 0.2em;
+    }
+    .replay:hover { color: var(--color-text); }
+    .replay:disabled { color: var(--color-muted); cursor: default; text-decoration: none; }
+
+    .use pre {
+      background: var(--color-surface);
+      padding: var(--space-4);
+      max-width: 56ch;
+    }
+    .limits p { color: var(--color-muted); }
+
+    footer {
+      margin-top: var(--space-8);
+      padding-top: var(--space-6);
+      border-top: 1px solid var(--rule);
+      color: var(--color-muted);
+      font-size: var(--text-sm);
+      line-height: var(--leading-sm);
+    }
+    footer p { margin: 0; max-width: 65ch; }
+
+    @media (prefers-reduced-motion: reduce) {
+      .record [data-field] { opacity: 1; }
+    }
+  </style>
+</head>
+<body>
+  <a class="skip" href="#how">Skip to how it works</a>
+  <div class="shell">
+    <header class="masthead">
+      <a class="wordmark" href="/" aria-label="Homepage">COMSAT</a>
+      <p class="meta">composable search · v0.1.0 · MIT</p>
+    </header>
+    <div class="page">
+      <section class="lede">
+        <h1>Sources produce canonical records. Consumers decide what they mean.</h1>
+        <p>COMSAT retrieves public evidence and emits a Record stream. It does not score truth, write a summary, or keep a search unless you ask it to watch.</p>
+        <p class="actions">
+          <a class="primary" href="https://github.com/douglance/comsat">Source and CLI</a>
+          <a class="secondary" href="https://github.com/douglance/comsat/blob/main/docs/operations.md">Operations</a>
+        </p>
+      </section>
+
+      <figure class="downlink" aria-labelledby="downlink-title">
+        <div class="downlink-head">
+          <h2 id="downlink-title">Record downlink</h2>
+          <p class="caption" id="downlink-caption">normalize · one item</p>
+        </div>
+        <ol class="stages" aria-label="Pipeline">
+          <li data-stage="source">source</li>
+          <li data-stage="normalize" aria-current="step">normalize</li>
+          <li data-stage="merge">merge</li>
+          <li data-stage="emit">emit</li>
+        </ol>
+        <div class="pair">
+          <div>
+            <h3>Source payload</h3>
+            <pre>{
+  "id": 22238335,
+  "type": "story",
+  "title": "Tell HN: …",
+  "by": "pg",
+  "time": 1580000000,
+  "url": "https://…"
+}</pre>
+          </div>
+          <div>
+            <h3>Canonical Record</h3>
+            <pre class="record" data-complete id="record">{
+  <span data-field="id"><span class="k">"id"</span>: <span class="v">"hacker-news:22238335"</span>,</span>
+  <span data-field="source"><span class="k">"source"</span>: <span class="v">"hacker-news"</span>,</span>
+  <span data-field="kind"><span class="k">"kind"</span>: <span class="v">"story"</span>,</span>
+  <span data-field="url"><span class="k">"url"</span>: <span class="v">"https://news.ycombinator.com/item?id=22238335"</span>,</span>
+  <span data-field="title"><span class="k">"title"</span>: <span class="v">"Tell HN: …"</span>,</span>
+  <span data-field="author"><span class="k">"author"</span>: <span class="v">"pg"</span>,</span>
+  <span data-field="created"><span class="k">"created_at"</span>: <span class="v">"2020-01-26T00:53:20Z"</span>,</span>
+  <span data-field="meta"><span class="k">"metadata"</span>: <span class="v">{ }</span></span>
+}</pre>
+          </div>
+        </div>
+        <button class="replay" type="button" id="replay">Replay normalization</button>
+      </figure>
+
+      <section class="how" id="how">
+        <h2>How it works</h2>
+        <ol>
+          <li>
+            <strong>One query, three bindings.</strong>
+            <p>CLI, MCP, and Code Mode invoke the same command graph. A local query needs no COMSAT account.</p>
+          </li>
+          <li>
+            <strong>Sources retrieve in their own protocols.</strong>
+            <p>GitHub, Hacker News, the web, and Stack Exchange each speak their API. Plugins never return vendor JSON to the caller.</p>
+          </li>
+          <li>
+            <strong>Every hit becomes a Record.</strong>
+            <p>Identity, source, kind, URL, optional title, text, author, timestamps, and a metadata object. IDs are source-scoped.</p>
+          </li>
+          <li>
+            <strong>The engine merges and collapses duplicates.</strong>
+            <p>Order is retrieval order, not a ranking. Consumers decide what the evidence means.</p>
+          </li>
+          <li>
+            <strong>Search is ephemeral. Watches persist.</strong>
+            <p>Search prints JSON Lines and does not write to the store. A watch repeats the query on a schedule and keeps observations, tenant-fenced.</p>
+          </li>
+        </ol>
+      </section>
+
+      <section class="use" id="use">
+        <h2>Use it</h2>
+        <pre><code>cargo install --path crates/comsat-cli --bin comsat
+comsat search "MCP OAuth" --source github --limit 5
+comsat --mcp</code></pre>
+      </section>
+
+      <section class="limits" id="limits">
+        <h2>This host</h2>
+        <p>The managed service on this domain requires <code>Authorization: Bearer</code>. Authenticated routes are <code>/search</code>, <code>/fetch</code>, <code>/follow</code>, <code>/watch/*</code>, <code>/history</code>, <code>/mcp</code>, and <code>/health</code>. Browser origins are denied unless explicitly allowed. Web search needs a Brave key; GitHub and Stack Exchange keys are optional.</p>
+      </section>
+    </div>
+    <footer>
+      <p>COMSAT is MIT-licensed. Native persistence uses SQLite. This Worker uses D1, Queues, and Cron. The CLI is the native distribution; this page is not a dashboard.</p>
+    </footer>
+  </div>
+  <script>
+    (function () {
+      var record = document.getElementById("record");
+      var button = document.getElementById("replay");
+      var stages = document.querySelectorAll(".stages li");
+      var fields = record ? record.querySelectorAll("[data-field]") : [];
+      var reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      if (!record || !button || reduce) return;
+
+      function setStage(name) {
+        stages.forEach(function (item) {
+          if (item.getAttribute("data-stage") === name) item.setAttribute("aria-current", "step");
+          else item.removeAttribute("aria-current");
+        });
+      }
+
+      function play() {
+        record.removeAttribute("data-complete");
+        fields.forEach(function (field) { field.classList.remove("on"); });
+        setStage("source");
+        button.disabled = true;
+        var i = 0;
+        function step() {
+          if (i === 0) setStage("normalize");
+          if (i < fields.length) {
+            fields[i].classList.add("on");
+            i += 1;
+            window.setTimeout(step, 140);
+            return;
+          }
+          setStage("merge");
+          window.setTimeout(function () {
+            setStage("emit");
+            record.setAttribute("data-complete", "");
+            button.disabled = false;
+          }, 220);
+        }
+        window.setTimeout(step, 180);
+      }
+
+      button.addEventListener("click", play);
+    })();
+  </script>
+</body>
+</html>

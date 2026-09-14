@@ -32,6 +32,9 @@ pub async fn route_request<S>(
 where
     S: Store + 'static,
 {
+    if crate::landing::is_landing_request(request.method().as_ref(), &request.path()) {
+        return crate::runtime_http::landing_page();
+    }
     let origins = allowed_origins(&env);
     let origin = request.headers().get("Origin")?;
     if !origin_allowed(origin.as_deref(), &origins) {

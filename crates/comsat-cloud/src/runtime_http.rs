@@ -36,6 +36,17 @@ pub async fn read_bounded_body(
     String::from_utf8(body).map_err(|error| BodyReadError::Worker(worker_error(error)))
 }
 
+pub fn landing_page() -> Result<Response> {
+    let mut response = Response::from_html(crate::landing::HTML)?;
+    response
+        .headers_mut()
+        .set("Cache-Control", "public, max-age=300")?;
+    response
+        .headers_mut()
+        .set("X-Content-Type-Options", "nosniff")?;
+    Ok(response)
+}
+
 pub fn preflight(origin: Option<&str>) -> Result<Response> {
     let response = Response::empty()?.with_status(204);
     apply_cors(response.headers(), origin)?;

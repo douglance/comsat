@@ -1,6 +1,7 @@
 #![forbid(unsafe_code)]
 
 pub mod auth;
+mod landing;
 
 #[cfg(any(target_arch = "wasm32", test))]
 mod queue_policy;

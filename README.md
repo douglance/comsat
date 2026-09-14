@@ -25,7 +25,8 @@ runtime uses SQLite. Both use the same source and information contracts. Local
 queries require no COMSAT account.
 
 Version 0.1.0 runs locally, as a self-hosted service, and on Cloudflare. The managed
-HTTP/MCP service is deployed at <https://comsat.dev> and requires a bearer token.
+HTTP/MCP service is deployed at <https://comsat.dev>. The landing page is public;
+tool routes require a bearer token.
 `www.comsat.dev` and <https://comsat-cloud.doug-lance.workers.dev> serve the same
 Worker. See the [acceptance ledger](docs/acceptance.md) for live retrieval and
 scheduled-watch evidence, fixture coverage, and remaining v1 limits.
