@@ -90,6 +90,20 @@ adapter supports.
 HTTP/MCP aggregate responses are bounded and collected by that adapter; native
 JSONL output streams progressively.
 
+## Measured native dispatch
+
+Release binary built from this tree, 12 runs each on an empty data directory
+with no plugins configured, measured as whole-process wall clock:
+
+| Command | Median | p90 | Max |
+| --- | --- | --- | --- |
+| `comsat source list` | 10 ms | 16 ms | 60 ms |
+| `comsat code list` | 10 ms | 14 ms | 23 ms |
+| `comsat history --limit 10` | 11 ms | 18 ms | 29 ms |
+
+These bound process start, command dispatch, and local persistence, not source
+retrieval, which is dominated by the upstream provider.
+
 ## Deployed v1 build
 
 Worker version `8b1b405e-8cd8-4c9c-98e3-56fd5f692415` carries the v1 work:

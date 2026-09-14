@@ -92,7 +92,7 @@ Status values:
 
 | Goal | Status | Evidence and gap |
 | --- | --- | --- |
-| 3.1 Fast native CLI | Partial | Native CLI exists and is tested. No latency or throughput target was measured in this audit. |
+| 3.1 Fast native CLI | Partial | Native CLI exists and is tested. Local dispatch is now measured at a 10-11 ms median per command in `docs/acceptance.md`; no throughput target under load has been set. |
 | 3.2 MCP access for agents | Partial | Native and hosted MCP are present. 2025-11-25 tool contract gaps remain in F1. |
 | 3.3 Incurs Code Mode composition | Partial | Code Mode search/fetch/follow works in fixtures and live HN. Durable lifecycle/history is missing in F5. |
 | 3.4 Normalize heterogeneous results into one schema | Proven | `Record` is canonical in `crates/comsat-types/src/record.rs:7-20`, and source conformance validates fixture records. |
