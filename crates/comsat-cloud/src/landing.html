@@ -216,7 +216,7 @@
     .scanner { order: 3; }
     @media (min-width: 64rem) {
       .deck {
-        grid-template-columns: 11rem minmax(0, 1fr) minmax(22rem, 26rem);
+        grid-template-columns: 16rem minmax(0, 1fr) minmax(22rem, 26rem);
         align-items: start;
       }
       .portrait { order: 1; }
@@ -233,9 +233,10 @@
       position: relative;
       overflow: hidden;
       background:
-        radial-gradient(80% 50% at 50% 78%, rgb(0 0 0 / 0.55), transparent 70%),
-        repeating-linear-gradient(to bottom, transparent 0 2px, rgb(0 0 0 / 0.2) 2px 3px),
-        #0e120c;
+        radial-gradient(120% 92% at 50% 14%, rgb(124 255 58 / 0.1), transparent 62%),
+        repeating-linear-gradient(to bottom, rgb(124 255 58 / 0.07) 0 1px, transparent 1px 3px),
+        #0b0d09;
+      box-shadow: inset 0 0 26px #000, inset 0 0 0 1px rgb(124 255 58 / 0.18);
     }
     .portrait-screen svg {
       display: block;
@@ -244,15 +245,17 @@
     }
     .dish {
       transform-box: fill-box;
-      transform-origin: 50% 80%;
-      animation: dish-yaw 4.8s linear infinite;
+      transform-origin: 50% 50%;
+      animation: dish-yaw 7s ease-in-out infinite;
     }
     .portrait.is-scanning .dish {
       animation-duration: 0.9s;
     }
     @keyframes dish-yaw {
       0%, 100% { transform: scaleX(1); }
-      50% { transform: scaleX(0.14); }
+      25% { transform: scaleX(0.58); }
+      50% { transform: scaleX(0.92); }
+      75% { transform: scaleX(0.44); }
     }
     .station-lamp {
       animation: station-lamp 1.8s ease-in-out infinite;
@@ -357,19 +360,20 @@
     .scanner h2 { margin: 0; white-space: nowrap; }
     .sweep-icon {
       display: block;
-      width: 2.5rem;
-      height: 2.5rem;
+      width: 2.75rem;
+      height: 2.75rem;
       flex: none;
+      padding: 0.28rem;
+      box-sizing: border-box;
       color: var(--color-accent);
+      background: linear-gradient(#67440a, #2a1c02);
+      border: 2px solid;
+      border-color: #ffd77a #8a5f00 #8a5f00 #ffd77a;
+      box-shadow: inset 0 0 12px rgb(255 176 0 / 0.28), inset 0 0 0 1px #000;
     }
     .replay .sweep-icon {
       width: 3rem;
       height: 3rem;
-      padding: 0.2rem;
-      background: #0b0d09;
-      border: 2px solid;
-      border-color: #ffe29a #5a3a00 #5a3a00 #ffe29a;
-      box-shadow: inset 1px 1px 0 #3a2a00;
     }
     .scanner.is-scanning .sweep-ring {
       animation: sweep-ring 1.1s linear;
@@ -471,10 +475,10 @@
       align-items: center;
       gap: var(--space-3);
       min-height: 44px;
-      padding: var(--space-2) var(--space-3);
+      padding: var(--space-2) var(--space-3) var(--space-2) var(--space-2);
       border: 2px solid;
-      border-color: #5a3a00 var(--color-accent) var(--color-accent) #5a3a00;
-      background: #1a1400;
+      border-color: #737f58 #4a5336 #4a5336 #737f58;
+      background: linear-gradient(#1c2115, #0c0f08);
       color: var(--color-accent);
       font-family: var(--font-display);
       font-size: var(--text-sm);
@@ -484,9 +488,10 @@
       text-align: left;
       cursor: pointer;
       touch-action: manipulation;
-      transition-property: transform;
+      transition-property: transform, border-color;
       transition-duration: var(--duration-fast);
       transition-timing-function: var(--ease-out);
+      box-shadow: inset 0 0 0 1px #000, inset 0 -10px 16px rgb(0 0 0 / 0.6);
     }
     .replay-copy {
       display: grid;
@@ -573,12 +578,17 @@
 </head>
 <body>
   <svg class="sprites" aria-hidden="true" focusable="false">
-    <symbol id="icon-scanner-sweep" viewBox="0 0 64 64" fill="none">
-      <circle class="sweep-ring" cx="32" cy="32" r="26" stroke="currentColor" stroke-width="2.4"/>
-      <circle class="sweep-ring" cx="32" cy="32" r="16" stroke="currentColor" stroke-width="2"/>
-      <circle cx="32" cy="32" r="4.5" stroke="currentColor" stroke-width="2"/>
-      <path d="M32 4 V14 M32 50 V60 M4 32 H14 M50 32 H60" stroke="currentColor" stroke-width="2.4" stroke-linecap="square"/>
-      <path d="M14 14 L20 20 M50 14 L44 20 M14 50 L20 44 M50 50 L44 44" stroke="currentColor" stroke-width="2.4" stroke-linecap="square"/>
+    <symbol id="icon-scanner-sweep" viewBox="0 0 64 64">
+      <g fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="2" y="2" width="60" height="60" rx="11" fill="currentColor" stroke="none" opacity=".10"/>
+        <circle class="sweep-ring" cx="32" cy="32" r="26.5" fill="currentColor" stroke="none" opacity=".14"/>
+        <circle class="sweep-ring" cx="32" cy="32" r="26.5" stroke-width="4"/>
+        <circle cx="32" cy="32" r="18" stroke-width="3.5" opacity=".92"/>
+        <circle cx="32" cy="32" r="10" stroke-width="3.5" opacity=".92"/>
+        <circle cx="32" cy="32" r="4.6" fill="currentColor" stroke="none"/>
+        <path d="M32 3.5V20M32 44V60.5M3.5 32H20M44 32H60.5" stroke-width="4.5"/>
+        <path d="M45.4 18.6 51.1 12.9M45.4 45.4 51.1 51.1M18.6 45.4 12.9 51.1M18.6 18.6 12.9 12.9" stroke-width="3.5"/>
+      </g>
     </symbol>
   </svg>
   <a class="skip" href="#how">Skip to how it works</a>
@@ -603,32 +613,59 @@
     <div class="deck">
       <aside class="portrait panel" id="portrait">
         <div class="portrait-screen well" aria-hidden="true">
-          <svg viewBox="0 28 140 116" fill="none">
-            <ellipse cx="70" cy="138" rx="46" ry="10" fill="#000" fill-opacity=".5"/>
-            <path d="M18 86 L70 112 L70 136 L18 110 Z" fill="#0f140c" stroke="#7cff3a" stroke-opacity=".55"/>
-            <path d="M122 86 L70 112 L70 136 L122 110 Z" fill="#1a2214" stroke="#7cff3a" stroke-opacity=".7"/>
-            <path d="M18 86 L70 60 L122 86 L70 112 Z" fill="#24301c" stroke="#7cff3a"/>
-            <path d="M34 78 L70 96 L70 104 L34 86 Z" fill="#ffb000" fill-opacity=".18" stroke="#ffb000" stroke-opacity=".55"/>
-            <path d="M4 92 L18 86 L18 110 L4 116 Z" fill="#141a10" stroke="#7cff3a" stroke-opacity=".5"/>
-            <path d="M4 92 L32 78 L18 86 Z" fill="#1e2818" stroke="#7cff3a" stroke-opacity=".5"/>
-            <path d="M48 70 L92 70 L92 76 L48 76 Z" fill="#0b0d09" stroke="#7cff3a" stroke-opacity=".45"/>
-            <path d="M52 72 h8" stroke="#7cff3a"/>
-            <path d="M66 72 h8" stroke="#7cff3a" stroke-opacity=".4"/>
-            <path d="M80 72 h8" stroke="#ffb000"/>
-            <path d="M66 84 L74 88 L74 100 L66 96 Z" fill="#0b0d09" stroke="#4ad4e0" stroke-opacity=".8"/>
-            <path d="M68 90 h4" stroke="#4ad4e0"/>
-            <path d="M68 94 h4" stroke="#4ad4e0" stroke-opacity=".4"/>
-            <circle class="station-lamp" cx="28" cy="82" r="2" fill="#ffb000"/>
-            <circle class="station-lamp" cx="112" cy="82" r="2" fill="#ffb000"/>
-            <circle cx="70" cy="62" r="3" fill="#0b0d09" stroke="#7cff3a"/>
-            <path d="M70 62 V46" stroke="#8a9370" stroke-width="3"/>
-            <path d="M70 62 V46" stroke="#7cff3a" stroke-width="1"/>
+          <svg viewBox="0 0 200 150" fill="none">
+            <defs>
+              <linearGradient id="cs-hull" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0" stop-color="#252d1c"/>
+                <stop offset="1" stop-color="#0d100a"/>
+              </linearGradient>
+              <linearGradient id="cs-plate" x1="0" y1="0" x2="1" y2="0">
+                <stop offset="0" stop-color="#2f3821"/>
+                <stop offset=".55" stop-color="#171c11"/>
+                <stop offset="1" stop-color="#0b0d09"/>
+              </linearGradient>
+              <radialGradient id="cs-face" cx="46%" cy="34%" r="76%">
+                <stop offset="0" stop-color="#2c3421"/>
+                <stop offset="1" stop-color="#0b0d09"/>
+              </radialGradient>
+            </defs>
+            <ellipse cx="100" cy="137" rx="82" ry="9" fill="#000" opacity=".55"/>
+            <g stroke="#7cff3a" stroke-width="2" stroke-linejoin="round" fill="url(#cs-hull)">
+              <path d="M22 136 L36 121 H164 L178 136 Z" fill="url(#cs-plate)"/>
+              <path d="M36 121 H164" stroke-opacity=".45" stroke-width="1.4"/>
+              <path d="M74 121 V88 L87 75 H151 L164 88 V121 Z"/>
+              <path d="M74 88 H164" stroke-opacity=".5" stroke-width="1.4"/>
+              <path d="M28 121 V72 L43 57 H71 L80 72 V121 Z"/>
+              <path d="M43 57 H71 L80 72 H28 Z" fill="#20281a"/>
+            </g>
+            <g stroke="#7cff3a" stroke-linecap="round" fill="none">
+              <path d="M100 92 V119 M124 92 V119 M148 92 V119" stroke-width="1.3" opacity=".38"/>
+              <path d="M36 86 H72 M36 95 H72 M36 104 H72 M36 113 H72" stroke-width="2.2" opacity=".3"/>
+            </g>
+            <g fill="#ffb000">
+              <circle class="station-lamp" cx="82" cy="95" r="1.7" opacity=".8"/>
+              <circle class="station-lamp" cx="82" cy="115" r="1.7" opacity=".8"/>
+              <circle class="station-lamp" cx="157" cy="95" r="1.7" opacity=".8"/>
+              <circle class="station-lamp" cx="157" cy="115" r="1.7" opacity=".8"/>
+              <rect x="88" y="110" width="62" height="6" opacity=".16"/>
+              <path d="M92 116 100 110M104 116 112 110M116 116 124 110M128 116 136 110M140 116 148 110" stroke="#ffb000" stroke-width="2.4" opacity=".7" fill="none"/>
+            </g>
+            <g stroke="#7cff3a" stroke-width="2" stroke-linejoin="round" fill="#1b2114">
+              <path d="M112 76 h22 l-4 -7 h-14 Z"/>
+              <rect x="118" y="42" width="10" height="29" rx="2"/>
+            </g>
+            <path d="M119 52 104 74M127 52 142 74" stroke="#ffb000" stroke-width="2" opacity=".65" fill="none"/>
+            <path d="M123 42 V33" stroke="#ffb000" stroke-width="2.4" fill="none"/>
             <g class="dish">
-              <ellipse cx="70" cy="46" rx="28" ry="12" fill="#0b0d09" stroke="#7cff3a" stroke-width="1.6"/>
-              <ellipse cx="70" cy="46" rx="17" ry="6.5" stroke="#7cff3a" stroke-opacity=".45"/>
-              <path d="M70 46 L90 34" stroke="#ffb000" stroke-width="1.4"/>
-              <circle cx="90" cy="34" r="2.2" fill="#ffb000"/>
-              <path d="M60 44 L80 48 M60 48 L80 44" stroke="#7cff3a" stroke-opacity=".35"/>
+              <g transform="translate(123 33) rotate(-12)">
+                <ellipse rx="41" ry="22.5" fill="url(#cs-face)" stroke="#7cff3a" stroke-width="3"/>
+                <ellipse rx="33" ry="17" fill="none" stroke="#7cff3a" stroke-width="1.6" opacity=".5"/>
+                <ellipse rx="20" ry="9.5" fill="none" stroke="#7cff3a" stroke-width="1.3" opacity=".35"/>
+                <path d="M-41 0 H41 M0 -22.5 V22.5" stroke="#7cff3a" stroke-width="1.2" opacity=".28" fill="none"/>
+                <circle r="5" fill="#0b0d09" stroke="#ffb000" stroke-width="2"/>
+                <path d="M-21 -7 0 -27M21 -7 0 -27M0 0 0 -27" stroke="#ffb000" stroke-width="1.8" opacity=".8" fill="none"/>
+                <rect x="-4.5" y="-34" width="9" height="9" rx="2" fill="#ffb000"/>
+              </g>
             </g>
           </svg>
         </div>
