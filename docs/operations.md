@@ -22,12 +22,32 @@ comsat code run 'return await comsat.comsat_search({text:"MCP OAuth",source:["gi
 ```
 
 Code Mode runs JavaScript through the existing Incurs local executor. It exposes
-tool results as data. It does not evaluate source text as instructions. Its local
-execution store is in memory; the native CLI currently supports run and discovery.
-Local read-only retrieval tools execute without an approval pause. Mutating,
-remote, and unclassified tools retain Incurs approval requirements. A paused,
-failed, or cancelled execution returns nonzero with its structured state; only a
-completed execution returns zero.
+tool results as data. It does not evaluate source text as instructions. Local
+read-only retrieval tools execute without an approval pause. Mutating, remote,
+and unclassified tools retain Incurs approval requirements. A paused, failed, or
+cancelled execution returns nonzero with its structured state; only a completed
+execution returns zero.
+
+Executions are durable. They are stored in the same SQLite database as watches
+and history, so an execution paused for approval in one process is inspected and
+advanced from another:
+
+| Command | Purpose |
+| --- | --- |
+| `comsat code list` | Durable executions, newest first |
+| `comsat code show <execution>` | One execution snapshot with artifact references |
+| `comsat code events <execution>` | Retained lifecycle and streaming events |
+| `comsat code artifact <execution> <artifact>` | One oversized value owned by an execution |
+| `comsat code approve <execution> <seq>` | Approve a pending action and continue |
+| `comsat code reject <execution> <seq>` | Reject a pending action |
+| `comsat code resume <execution>` | Replay a paused execution deterministically |
+| `comsat code cancel <execution>` | Cancel a running or paused execution |
+| `comsat code rollback <execution>` | Compensate applied actions in reverse order |
+| `comsat code prune <keep>` | Keep the newest executions and delete the rest |
+
+Rollback compensates `watch_add` by deleting the watch it created. Any other
+applied action reports that it did not compensate rather than claiming a revert
+it cannot perform. Reading Code Mode state never creates the database.
 
 ## Self-hosted watches
 

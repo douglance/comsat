@@ -1,6 +1,7 @@
 #![forbid(unsafe_code)]
 
 mod codemode;
+mod codemode_store;
 mod http_client;
 mod native_store;
 mod notifications;
@@ -24,7 +25,7 @@ const RESPONSE_LIMIT_BYTES: usize = 2 * 1024 * 1024;
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let app = Arc::new(build_app().await?);
-    let cli = native_cli(Arc::clone(&app));
+    let cli = native_cli(&app);
     let argv = env::args().skip(1).collect::<Vec<_>>();
 
     let mut writer = output::UnixOutput::new(io::stdout(), io::stderr());
@@ -44,8 +45,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-fn native_cli(app: Arc<ComsatApp>) -> Cli {
-    build_serving_cli(Arc::clone(&app), Arc::new(NativeServeHooks)).group(codemode::group(app))
+fn native_cli(app: &Arc<ComsatApp>) -> Cli {
+    build_serving_cli(Arc::clone(app), Arc::new(NativeServeHooks)).group(codemode::group(app))
 }
 
 /// Native deployment behavior for the shared `serve` command: log outbound

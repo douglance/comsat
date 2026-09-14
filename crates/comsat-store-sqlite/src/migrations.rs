@@ -5,6 +5,7 @@ use crate::codec::map_sql;
 
 const INITIAL: &str = include_str!("../../../migrations/0001_initial.sql");
 const DELIVERIES: &str = include_str!("../../../migrations/0002_delivery_notifications.sql");
+const CODEMODE: &str = include_str!("../../../migrations/0003_codemode_executions.sql");
 
 pub fn apply(connection: &mut Connection) -> StoreResult<()> {
     let transaction = connection.transaction().map_err(map_sql)?;
@@ -25,6 +26,19 @@ pub fn apply(connection: &mut Connection) -> StoreResult<()> {
         transaction.execute_batch(DELIVERIES).map_err(map_sql)?;
         transaction
             .execute("INSERT INTO schema_migrations(version) VALUES (2)", [])
+            .map_err(map_sql)?;
+    }
+    let applied: bool = transaction
+        .query_row(
+            "SELECT EXISTS(SELECT 1 FROM schema_migrations WHERE version = 3)",
+            [],
+            |row| row.get(0),
+        )
+        .map_err(map_sql)?;
+    if !applied {
+        transaction.execute_batch(CODEMODE).map_err(map_sql)?;
+        transaction
+            .execute("INSERT INTO schema_migrations(version) VALUES (3)", [])
             .map_err(map_sql)?;
     }
     transaction.commit().map_err(map_sql)

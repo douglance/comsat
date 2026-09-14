@@ -15,6 +15,7 @@ mod complexity;
 mod conformance;
 mod manifest;
 mod native_test;
+mod native_test_codemode;
 mod native_test_process;
 mod wasm;
 

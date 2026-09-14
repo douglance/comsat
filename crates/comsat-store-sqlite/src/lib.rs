@@ -7,6 +7,8 @@ use std::{
 };
 
 mod codec;
+#[cfg(feature = "codemode")]
+mod codemode;
 mod deliveries;
 mod migrations;
 mod ops;
@@ -31,6 +33,9 @@ use ops::{
 use rusqlite::{Connection, params};
 use sql::{CLAIM_WATCH_SQL, START_RUN_SQL, WATCH_SELECT_SQL};
 
+#[cfg(feature = "codemode")]
+pub use codemode::SqliteCodeModeStore;
+
 #[derive(Clone)]
 pub struct SqliteStore {
     connection: Arc<Mutex<Connection>>,
@@ -43,6 +48,12 @@ impl SqliteStore {
 
     pub fn in_memory() -> StoreResult<Self> {
         Self::from_connection(Connection::open_in_memory().map_err(map_sql)?)
+    }
+
+    /// The shared connection, so sibling stores in this crate reuse one handle.
+    #[cfg(feature = "codemode")]
+    pub(crate) fn raw_connection(&self) -> Arc<Mutex<Connection>> {
+        Arc::clone(&self.connection)
     }
 
     pub fn apply_migrations(&self) -> StoreResult<()> {

@@ -9,9 +9,15 @@ license.workspace = true
 async-trait.workspace = true
 comsat-store.workspace = true
 comsat-types.workspace = true
+incurs-codemode = { workspace = true, optional = true }
 rusqlite = { version = "0.37", features = ["bundled"] }
+sha2 = { version = "0.10", optional = true }
 serde.workspace = true
 serde_json.workspace = true
+
+[features]
+default = []
+codemode = ["dep:incurs-codemode", "dep:sha2"]
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["rt"] }

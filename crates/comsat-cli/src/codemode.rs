@@ -6,19 +6,27 @@ use incurs::{
     command::{CommandDef, TypedResult},
 };
 use incurs_codemode::{
-    CodeMode, CodeModeRunOptions, ExecutionState, ExecutionStatus, IncurConnector, MemoryStore,
-    ReplayPolicy, ToolAnnotations, ToolOrigin, ToolPolicy, ToolPolicyResolver,
+    ArtifactStore, CodeMode, CodeModeRunOptions, ExecutionState, ExecutionStatus, IncurConnector,
+    ReplayPolicy, RuntimeStore, ToolAnnotations, ToolOrigin, ToolPolicy, ToolPolicyResolver,
 };
 use incurs_codemode_local::LocalExecutor;
 use serde::Deserialize;
 use serde_json::Value;
 use tokio_util::sync::{CancellationToken, DropGuard};
 
-pub fn group(app: Arc<ComsatApp>) -> Cli {
-    Cli::create("code")
-        .description("Run local Code Mode against COMSAT tools")
-        .command("run", run_command(Arc::clone(&app)))
-        .command("tools", tools_command(app))
+use crate::codemode_store::{LazyCodeModeStore, store as codemode_store};
+use crate::native_store::database_path;
+
+mod connector;
+mod lifecycle;
+
+pub fn group(app: &Arc<ComsatApp>) -> Cli {
+    let store = codemode_store(database_path());
+    let cli = Cli::create("code")
+        .description("Run durable Code Mode against COMSAT tools")
+        .command("run", run_command(Arc::clone(app), Arc::clone(&store)))
+        .command("tools", tools_command(Arc::clone(app), Arc::clone(&store)));
+    lifecycle::register(cli, app, &store)
 }
 
 #[derive(Debug, Deserialize, incurs::Args)]
@@ -31,17 +39,17 @@ struct ToolsArgs {
     query: String,
 }
 
-fn run_command(app: Arc<ComsatApp>) -> CommandDef {
+fn run_command(app: Arc<ComsatApp>, store: Arc<LazyCodeModeStore>) -> CommandDef {
     CommandDef::typed::<RunArgs, (), (), Value, _, _>("run", move |ctx| {
         let app = Arc::clone(&app);
+        let store = Arc::clone(&store);
         let code = ctx.args.code;
         let (options, guard) = run_options(ctx.request);
         async move {
-            let result =
-                run_execution(
-                    move || async move { code_mode(&app).execute_with(&code, options).await },
-                )
-                .await;
+            let result = run_execution(move || async move {
+                code_mode(&app, store).execute_with(&code, options).await
+            })
+            .await;
             drop(guard);
             match result {
                 Ok(value) => value,
@@ -53,12 +61,15 @@ fn run_command(app: Arc<ComsatApp>) -> CommandDef {
     .done()
 }
 
-fn tools_command(app: Arc<ComsatApp>) -> CommandDef {
+fn tools_command(app: Arc<ComsatApp>, store: Arc<LazyCodeModeStore>) -> CommandDef {
     CommandDef::typed::<ToolsArgs, (), (), Value, _, _>("tools", move |ctx| {
         let app = Arc::clone(&app);
+        let store = Arc::clone(&store);
         let query = ctx.args.query;
         async move {
-            match run_local(move || async move { code_mode(&app).search(&query).await }).await {
+            match run_local(move || async move { code_mode(&app, store).search(&query).await })
+                .await
+            {
                 Ok(value) => value,
                 Err(error) => TypedResult::error("codemode_error", error),
             }
@@ -82,7 +93,7 @@ fn run_options(
     )
 }
 
-async fn run_local<MakeFuture, Future, Output>(
+pub async fn run_local<MakeFuture, Future, Output>(
     make_future: MakeFuture,
 ) -> Result<TypedResult<Value>, String>
 where
@@ -143,13 +154,16 @@ fn json_result<T: serde::Serialize>(value: T) -> TypedResult<Value> {
     }
 }
 
-fn code_mode(app: &ComsatApp) -> CodeMode {
-    let connector = IncurConnector::new(
-        build_cli(Arc::new(app.clone().without_target_stream_provider())).tool_catalog(),
-    )
-    .with_policy_resolver(Arc::new(ComsatRetrievalPolicy));
-    CodeMode::new(
-        Arc::new(MemoryStore::default()),
+pub fn code_mode(app: &ComsatApp, store: Arc<LazyCodeModeStore>) -> CodeMode {
+    let connector = connector::ComsatConnector::new(
+        IncurConnector::new(
+            build_cli(Arc::new(app.clone().without_target_stream_provider())).tool_catalog(),
+        )
+        .with_policy_resolver(Arc::new(ComsatRetrievalPolicy)),
+    );
+    CodeMode::with_artifact_store(
+        Arc::clone(&store) as Arc<dyn RuntimeStore>,
+        store as Arc<dyn ArtifactStore>,
         LocalExecutor::default(),
         vec![Arc::new(connector)],
     )

@@ -5,6 +5,7 @@ use serde_json::Value;
 
 use crate::Result;
 use crate::cloud_test_support::TempDir;
+use crate::native_test_codemode::assert_durable_lifecycle;
 use crate::native_test_process::{RunOutput, ServerProcess, run_comsat};
 
 const FIXTURE_SOURCE: &str = "fixture-source";
@@ -13,6 +14,9 @@ pub fn run(root: &Path) -> Result<()> {
     build_comsat(root)?;
     let env = NativeEnv::new(root)?;
 
+    // First, while the data directory still does not exist: Code Mode reads
+    // must not create it.
+    assert_durable_lifecycle(&env)?;
     assert_positional_search_jsonl(&env)?;
     assert_fetch_pipeline(&env)?;
     assert_follow_pipeline(&env)?;
@@ -211,7 +215,7 @@ impl NativeEnv {
         })
     }
 
-    fn comsat(&self, args: &[&str], stdin: &str) -> Result<RunOutput> {
+    pub fn comsat(&self, args: &[&str], stdin: &str) -> Result<RunOutput> {
         run_comsat(self, args, stdin, Duration::from_secs(30))
     }
 

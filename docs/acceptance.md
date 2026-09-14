@@ -77,9 +77,14 @@ contract, not successful cloud retrieval. Native retrieval and fixtures passed.
 Webhook delivery is implemented and fixture-tested but remains unconfigured; no
 live notification was sent.
 
-Native Code Mode uses the existing Incurs executor with an in-memory execution
-store. Durable cross-process Code Mode history is not exposed by this release.
-The cloud MCP protocol family is limited to what the pinned Incurs adapter supports.
+Native Code Mode uses the existing Incurs executor with a durable SQLite
+execution store. `cargo xtask native-test` proves the lifecycle across separate
+CLI processes: a completed execution is listed, shown, and read for events from
+other invocations; a mutating tool pauses for approval and the pause survives
+the process; approval applies the watch; rollback compensates it; and prune
+keeps only the newest executions. Reading Code Mode state never creates the
+database. The cloud MCP protocol family is limited to what the pinned Incurs
+adapter supports.
 HTTP/MCP aggregate responses are bounded and collected by that adapter; native
 JSONL output streams progressively.
 
