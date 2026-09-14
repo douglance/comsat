@@ -25,6 +25,7 @@ pub fn run(root: &Path) -> Result<()> {
     assert_partial_and_strict(&env)?;
     assert_self_host_watch_history(root, &env)?;
     assert_plugin_process_cancellation(&env)?;
+    assert_source_contracts(&env)?;
     Ok(())
 }
 
@@ -133,6 +134,26 @@ fn assert_self_host_watch_history(root: &Path, env: &NativeEnv) -> Result<()> {
     let server = ServerProcess::start(root, env)?;
     poll_history(env, "native-fixture-watch")?;
     drop(server);
+    Ok(())
+}
+
+/// Every registered source, including the externally loaded plugin, must pass
+/// the fixture-free part of source conformance: declared operations exist and
+/// advertise internally consistent schemas.
+fn assert_source_contracts(env: &NativeEnv) -> Result<()> {
+    let output = env.comsat(&["source", "test"], "")?;
+    output.expect_code(0, "source test")?;
+    let report: Value = serde_json::from_str(output.stdout.trim())?;
+    if report["failures"] != Value::Array(Vec::new()) {
+        return Err(format!("source contract failures: {}", report["failures"]).into());
+    }
+    if report["sources_checked"].as_u64().unwrap_or_default() < 5 {
+        return Err(format!(
+            "source test checked {} sources, expected the plugin to be included",
+            report["sources_checked"]
+        )
+        .into());
+    }
     Ok(())
 }
 

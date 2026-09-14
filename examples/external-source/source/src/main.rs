@@ -98,7 +98,7 @@ fn search_command() -> CommandDef {
 }
 
 fn fetch_command() -> CommandDef {
-    CommandDef::build(
+    let mut command = CommandDef::build(
         "fetch",
         TargetCommand {
             output: TargetOutput::Fetch,
@@ -106,11 +106,15 @@ fn fetch_command() -> CommandDef {
     )
     .description("Fetch one fixture record")
     .options::<TargetOptions>()
-    .done()
+    .done();
+    // A source must advertise what it returns: COMSAT's conformance check reads
+    // this schema, and a consumer has no other way to know the result shape.
+    command.output_schema = Some(schema_for::<Record>());
+    command
 }
 
 fn follow_command() -> CommandDef {
-    CommandDef::build(
+    let mut command = CommandDef::build(
         "follow",
         TargetCommand {
             output: TargetOutput::Follow,
@@ -118,7 +122,13 @@ fn follow_command() -> CommandDef {
     )
     .description("Follow fixture relationships")
     .options::<TargetOptions>()
-    .done()
+    .done();
+    command.output_schema = Some(schema_for::<Vec<Record>>());
+    command
+}
+
+fn schema_for<T: schemars::JsonSchema>() -> Value {
+    serde_json::to_value(schemars::schema_for!(T)).expect("schema must serialize")
 }
 
 enum TargetOutput {

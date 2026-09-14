@@ -6,7 +6,7 @@ mod watch;
 
 use std::sync::Arc;
 
-use comsat_source::OperationKind;
+use comsat_source::{ConformanceSuite, OperationKind};
 use comsat_store::{DeleteWatch, HistoryRequest};
 use comsat_types::SourceId;
 use incurs::{
@@ -159,6 +159,10 @@ fn source_test_command(app: Arc<ComsatApp>) -> CommandDef {
     .done()
 }
 
+/// Every registered source must advertise the operations its profile declares
+/// and expose internally consistent tool schemas for them. Fixture-driven
+/// conformance stays in the test suite; this is the part that can run against a
+/// live catalog without calling any upstream.
 fn source_registration_failures(app: &ComsatApp) -> Vec<String> {
     let mut failures = Vec::new();
     for source in app.catalog.sources() {
@@ -172,6 +176,11 @@ fn source_registration_failures(app: &ComsatApp) -> Vec<String> {
             {
                 failures.push(format!("{} missing {tool}", source.descriptor.id));
             }
+        }
+        if let Err(error) =
+            ConformanceSuite::new(source.descriptor.clone()).check_contracts(&source.catalog)
+        {
+            failures.push(format!("{}: {error}", source.descriptor.id));
         }
     }
     failures

@@ -156,6 +156,24 @@ impl ConformanceSuite {
             .map_err(|error| ConformanceError::Tool(error.to_string()))
     }
 
+    /// Checks the tool contracts a source advertises without calling it: every
+    /// declared operation exists and its input and output schemas are internally
+    /// consistent. This is the part of conformance that needs no fixtures, so
+    /// `comsat source test` can run it against a live catalog.
+    pub fn check_contracts(&self, catalog: &ToolCatalog) -> Result<(), ConformanceError> {
+        if !self.descriptor.profile.search {
+            return Err(ConformanceError::MissingSearch);
+        }
+        self.require_tool(catalog, OperationKind::Search)?;
+        if self.descriptor.profile.fetch {
+            self.require_tool(catalog, OperationKind::Fetch)?;
+        }
+        if self.descriptor.profile.follow {
+            self.require_tool(catalog, OperationKind::Follow)?;
+        }
+        Ok(())
+    }
+
     fn require_tool(
         &self,
         catalog: &ToolCatalog,
@@ -165,13 +183,14 @@ impl ConformanceSuite {
         let definition = catalog
             .get(name)
             .ok_or_else(|| ConformanceError::MissingTool(name.to_owned()))?;
-        if definition.input_schema.is_null() || definition.output_schema.is_none() {
-            return Err(ConformanceError::MissingTool(name.to_owned()));
+        if definition.input_schema.is_null() {
+            return Err(undeclared(name, "input"));
         }
+        let Some(output_schema) = &definition.output_schema else {
+            return Err(undeclared(name, "output"));
+        };
         validate_schema_document(name, &definition.input_schema)?;
-        if let Some(output_schema) = &definition.output_schema {
-            validate_schema_document(name, output_schema)?;
-        }
+        validate_schema_document(name, output_schema)?;
         Ok(())
     }
 
@@ -291,6 +310,15 @@ impl ConformanceSuite {
             return Err(ConformanceError::CancellationLeakedRequest(leaked));
         }
         Ok(true)
+    }
+}
+
+/// A tool that declares no schema leaves a consumer guessing the shape of what
+/// it sends or receives.
+fn undeclared(tool: &str, position: &str) -> ConformanceError {
+    ConformanceError::InvalidToolSchema {
+        tool: tool.to_owned(),
+        reason: format!("tool advertises no {position} schema"),
     }
 }
 

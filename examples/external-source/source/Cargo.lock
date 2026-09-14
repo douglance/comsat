@@ -141,6 +141,7 @@ dependencies = [
  "async-trait",
  "comsat-types",
  "incurs",
+ "schemars",
  "serde",
  "serde_json",
  "tokio",

@@ -79,6 +79,15 @@ servers, and registers successful sources in the runtime catalog. Invalid
 plugins are reported as diagnostics without discarding other successfully loaded
 sources.
 
+## Contract checks
+
+`comsat source test` checks every registered source, including externally loaded
+plugins, against the fixture-free part of source conformance: each operation the
+plugin's profile declares must exist as a tool, and its input and output schemas
+must be internally consistent. A source that advertises `supportsFetch` but
+returns results with no declared output schema fails this check, because a
+consumer would have no way to know the result shape.
+
 ## Cancellation
 
 A plugin runs as a separate process. When the work that started it is cancelled

@@ -9,6 +9,7 @@ publish = false
 [dependencies]
 comsat-types = { path = "../../../crates/comsat-types" }
 incurs = { git = "https://github.com/douglance/incurs", rev = "8b1a6c400b2eb65ee379e099c1d7bd96525f536a", default-features = false, features = ["cli", "mcp"] }
+schemars = "1"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 async-trait = "0.1"
