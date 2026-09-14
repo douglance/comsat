@@ -48,6 +48,7 @@ pub fn build_serving_cli(app: Arc<ComsatApp>, hooks: Arc<dyn ServeHooks>) -> Cli
 fn serve_command(app: Arc<ComsatApp>, hooks: Arc<dyn ServeHooks>) -> CommandDef {
     CommandDef::build("serve", ServeCommand { app, hooks })
         .description("Run COMSAT HTTP and watch scheduler")
+        .options::<ServeOptions>()
         .done()
 }
 

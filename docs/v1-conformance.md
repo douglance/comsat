@@ -4,6 +4,7 @@ Status: in review
 Version: 1.0
 Owner: quality engineer
 Inputs: COMSAT product specification sections 1-79, repository commit 2a43f85e24fcbdbd3fe0850cba8d2bd26a84e2e7, deployed Worker 78d2b084-6993-444e-b561-20295c80503c, GitHub Actions run 34788597060
+Revision: 2026-09-13 follow-up. Findings F1, F3, F4, F5, F7, and F8 are closed with the evidence recorded under each. F2 and F6 remain open and both are blocked on a provider credential the operator must supply.
 Governing references: COMSAT PRD v1.0, MCP schema reference 2025-11-25 at https://modelcontextprotocol.io/specification/2025-11-25/schema, repository docs and source cited below
 Scope: This artifact records factual conformance evidence and gaps. It is not an approval request.
 
@@ -11,7 +12,7 @@ Scope: This artifact records factual conformance evidence and gaps. It is not an
 
 ## Quality Gate
 
-Verdict: FAIL for full v1 release.
+Verdict: FAIL for full v1 release. Every finding that engineering can close is closed; the two that remain need provider credentials.
 
 Phase: quality and validation - partial.
 
@@ -21,23 +22,30 @@ Validation status: FAIL for full v1. COMSAT has a strong 0.1 implementation, but
 
 ## Release-Blocking Findings
 
-F1 - Critical - MCP 2025-11-25 tool contracts are not satisfied for aggregate COMSAT schemas and hosted annotations. `crates/comsat-app/src/commands/schema.rs:32-48` defines array-root output schemas for record arrays, and `crates/comsat-app/src/tests.rs:301-309` asserts array roots for `comsat_search`, `comsat_follow`, and `history`. The MCP 2025-11-25 schema restricts `Tool.outputSchema` to root `type: "object"` and defines `CallToolResult.structuredContent` as an object. Native stdio hides the internal tools behind facade tools with no advertised `outputSchema`, but `get_tool_details` exposes the internal `comsat_search.outputSchema` as an array in Apoc receipt `01a09d12-41a7-79e0-b3f2-5d3d1b3d99c4`. A concurrent cloud-test addition in `xtask/src/cloud_test.rs:90-105` now asserts camelCase `readOnlyHint` for hosted read-only tools and is expected to fail until the pinned Incurs adapter is updated. Fix owner: Incurs adapter plus COMSAT schema caller. A passing gate needs protocol tests for native and Cloudflare MCP.
+F1 - CLOSED - MCP 2025-11-25 tool contracts are satisfied. Aggregate output schemas now have object roots and the hosted adapter emits camelCase annotation hints, fixed upstream in Incurs `8b1a6c4` and in the COMSAT schema caller. `xtask/src/cloud_test.rs` asserts the contract against a locally built Worker in every gate run, and deployed Worker `a8b5235f-fef5-4824-a438-5a849f3079be` was probed directly at Apoc receipt `01a09d4b-be83-7392-a7c7-5b3edbea6f87`: every read-only tool advertises `readOnlyHint` with no snake_case keys, every advertised `outputSchema` has an object root with no nested `$schema` and no unresolved local reference, and live MCP and HTTP search and fetch returned `hacker-news:22238335`.
 
-F2 - Critical - full live web-search acceptance is not proven. `docs/acceptance.md:68-70` and `docs/sources.md:28-35` state that web search requires a Brave provider key before live acceptance can pass. Scenario C is only live-proven through GitHub fetch, while web search/fetch is fixture-only in `docs/acceptance.md:11`. Fix owner: release owner to provide provider credentials and rerun live web search/fetch acceptance.
+F2 - OPEN, credential-blocked - live web search is still unproven. The web source requires a Brave Search provider key in `COMSAT_BRAVE_API_KEY` (native) or `BRAVE_SEARCH_API_KEY` (managed); no key exists on the build machine or in the Worker secrets. Obtaining one requires creating a Brave Search API account, which is the operator's to create. Everything else about the source is fixture-tested, and a missing key produces a structured authentication error while other sources still return records.
 
-F3 - High - required GitHub source coverage is incomplete. The spec section 44 says the GitHub source SHOULD support repositories, repository discussions, and pull-request review discussions where accessible. `docs/sources.md:9` documents only issues and pull requests, and `docs/sources.md:19-20` explicitly says repository search, review-specific traversal, and Discussions are not implemented. Fix owner: source engineer.
+F3 - CLOSED - GitHub coverage includes repositories, repository discussions, and pull-request review discussions. Search selects the object class with `type:repo` and `type:discussion`; fetch resolves repository, issue, pull-request, and discussion targets; follow returns issue comments, a pull request's reviews and review comments, a repository's discussions, and a discussion's comments. Discussions use GitHub's GraphQL API and require a token, which the source reports as a structured authentication error before making any request. Twelve plugin tests cover the paths, and every operation was verified against live GitHub.
 
-F4 - High - Source Profile conformance is too shallow for the v1 suite. `crates/comsat-source/src/conformance.rs:47-75` checks required search, stable record IDs, and optional fetch/follow fixtures. It does not check cancellation propagation, structured error schema classes, streaming deserialization, or live Agent Plugin process cancellation. `crates/comsat-app/src/commands/mod.rs:132-159` implements `comsat source test` as source registration consistency only. Fix owner: source/conformance engineer.
+F4 - CLOSED - Source Profile conformance is deep enough for the v1 suite. `crates/comsat-source/src/conformance/schema.rs` walks tool schemas as a contract consistency check over known schema keywords, so data positions are left alone while schema arrays, embedded resources, anchors, and local references are validated. The suite also checks stable record identity, streaming record deserialization, structured `SourceError` classes, and cancellation proven by observing the pending source request being dropped rather than by trusting the reported outcome. External Agent Plugin process cancellation is covered by `cargo xtask native-test`, which hangs a search inside the fixture plugin, kills the caller, and requires the plugin process to exit.
 
-F5 - High - durable Code Mode lifecycle is not exposed by COMSAT. `docs/operations.md:24-30` says the native CLI Code Mode store is in memory and supports run and discovery. `docs/acceptance.md:80-81` says durable cross-process Code Mode history is not exposed. The v1 spec requires Incurs Code Mode as the primary programmable composition environment and lists durable lifecycle, artifacts, replay, approvals, and rollback as required existing Incurs capabilities to preserve. Fix owner: app/Code Mode engineer.
+F5 - CLOSED - the durable Code Mode lifecycle is exposed. Executions, oversized artifacts, and snippets persist in the same SQLite database as watches and history, and `comsat code` exposes list, show, events, artifact, approve, reject, resume, cancel, rollback, and prune. Rollback compensates `watch_add` by deleting the watch it created and reports any other action as uncompensated rather than claiming a revert it cannot perform. `cargo xtask native-test` proves the lifecycle across separate CLI processes, including that reading Code Mode state never creates the database.
 
-F6 - Medium - managed Stack Exchange success is unproven. `docs/acceptance.md:73-76` records the managed Stack Exchange egress IP as throttled and says the receipt proves the error contract, not successful cloud retrieval. Native and fixture success reduce source risk, but managed first-party source coverage remains incomplete.
+F6 - OPEN, credential-blocked - managed Stack Exchange retrieval is still throttled. Re-probed on the deployed Worker after this work: Stack Exchange answers `throttle_violation: too many requests from this IP, more requests available in 35237 seconds` for the shared Cloudflare egress address, across repeated attempts. The error contract is correct and preserved as `rate_limit`; successful managed retrieval needs a Stack Apps API key in `STACK_EXCHANGE_API_KEY`, which raises the quota from the shared per-IP allowance to a per-key allowance. Registering that key requires a Stack Apps account and is the operator's to create.
 
-F7 - Medium - `serve` is not owned by the shared `comsat-app` command graph. `crates/comsat-app/src/commands/mod.rs:27-37` builds search, fetch, follow, source, watch, and history. `crates/comsat-cli/src/main.rs:57-61` adds `serve` only in the native CLI crate. This deviates from section 53, which assigns `serve` to `comsat-app`, and weakens the "same command graph" story for HTTP/MCP surfaces. Fix owner: app engineer.
+F7 - CLOSED - `serve` is owned by the shared `comsat-app` command graph behind a `serve` feature, with native transport logging and notification flushing attached through `ServeHooks`. The HTTP surface it exposes is the same graph every other surface uses. Registering its options also restored the documented `--addr` flag, which the previous command silently rejected.
 
-F8 - Medium - notification delivery is implemented but not live-proven. `docs/acceptance.md:77-78` says webhook delivery is fixture-tested and unconfigured, and no live notification was sent. This blocks claims around managed notification operational value but does not block retrieval-only 0.1.
+F8 - CLOSED - notification delivery is live-proven. A self-hosted watch over Hacker News observed two records and delivered one HTTPS POST to a disposable external receiver carrying type `comsat.watch.records_observed`, the tenant and watch identity, both canonical records, and a stable `Idempotency-Key`, with no credential in the payload. The delivery row finished `succeeded` after one attempt and the receiver was deleted afterwards.
 
 ## V&V Evidence
+
+Follow-up verification evidence (2026-09-13, after the findings above were addressed):
+
+- Deployed Worker `a8b5235f-fef5-4824-a438-5a849f3079be` passed a direct MCP contract and live-retrieval probe: `01a09d4b-be83-7392-a7c7-5b3edbea6f87`.
+- `cargo xtask check` passed on the corrected tree, including `cloud-test` against a locally built Worker and `native-test` covering the durable Code Mode lifecycle and external plugin cancellation.
+- Every new check was mutation-probed: removing local-reference resolution, leaking a cancelled source request, dropping pull-request review traversal, removing the Discussions token guard, and removing rollback compensation each turn the relevant check red.
+- Remaining open findings are F2 and F6; both require a provider credential and neither is reachable from this repository.
 
 Verification evidence:
 

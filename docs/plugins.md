@@ -79,4 +79,13 @@ servers, and registers successful sources in the runtime catalog. Invalid
 plugins are reported as diagnostics without discarding other successfully loaded
 sources.
 
+## Cancellation
+
+A plugin runs as a separate process. When the work that started it is cancelled
+or its caller exits, COMSAT tears that process down; `cargo xtask native-test`
+proves it by hanging a search inside the fixture plugin, killing the caller, and
+requiring the plugin process to exit. The fixture answers the search text
+`hang-until-cancelled` by never returning, which is what makes that check
+possible.
+
 See `examples/external-source` for a minimal Rust source package. Its source crate pins Incurs to git revision `8b1a6c400b2eb65ee379e099c1d7bd96525f536a` so the example does not depend on a sibling checkout.

@@ -74,8 +74,10 @@ The managed Stack Exchange egress IP was throttled by the upstream API during
 live acceptance. The official error envelope is preserved as `rate_limit`, with
 backoff respected. `01a09ce8-6693-74e2-8408-e73943c7df79` verifies that error
 contract, not successful cloud retrieval. Native retrieval and fixtures passed.
-Webhook delivery is implemented and fixture-tested but remains unconfigured; no
-live notification was sent.
+Webhook delivery is live-proven: one real HTTPS notification carrying two
+Hacker News records reached a disposable external receiver with a stable
+idempotency key and no credential in the payload, and its delivery row finished
+`succeeded` after one attempt. See [notifications](notifications.md).
 
 Native Code Mode uses the existing Incurs executor with a durable SQLite
 execution store. `cargo xtask native-test` proves the lifecycle across separate
@@ -100,6 +102,12 @@ object root with no nested `$schema` and no unresolved local reference, and live
 MCP and HTTP search and fetch returned `hacker-news:22238335` with the requested
 source filter honored. `cargo xtask cloud-test` asserts the same contract against
 a locally built Worker so the gate fails before a deployment can regress it.
+
+Source conformance now validates tool-schema contracts, stable record identity,
+structured source-error classes, and active cancellation observed as the pending
+source request being dropped. External Agent Plugin process cancellation is
+covered separately by `cargo xtask native-test`, which requires a cancelled
+search to leave no plugin process behind.
 
 Additional release requirements: source conformance for every plugin; cancellation
 and partial failure; strict local quality gate; runtime-neutral WASM checks;

@@ -66,4 +66,11 @@ The `deliveries` table records status, attempts, next-attempt time, and lease st
 Operational logs report status and attempt counts without destination URLs or
 credentials. Apply migration `0002_delivery_notifications.sql` before deploying
 the managed sender; native installations apply it transactionally once on upgrade.
-No live notification receiver was configured during implementation acceptance.
+
+Live delivery was proven on September 13, 2026 against a disposable external
+HTTPS receiver. A self-hosted watch over Hacker News observed two records, and
+the receiver logged one POST carrying type `comsat.watch.records_observed`, the
+tenant and watch identity, both canonical records, and a stable
+`Idempotency-Key` header. The payload carried no webhook credential, and the
+`deliveries` row finished `succeeded` after one attempt. The receiver was
+deleted afterwards.

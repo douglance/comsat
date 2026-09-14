@@ -15,6 +15,9 @@ use std::sync::OnceLock;
 
 const SOURCE_ID: &str = "fixture-source";
 
+/// Search text that makes this fixture hang until it is cancelled.
+const HANG_QUERY: &str = "hang-until-cancelled";
+
 #[derive(Debug, Deserialize, incurs::Args)]
 struct SearchArgs {
     text: String,
@@ -82,6 +85,11 @@ fn search_command() -> CommandDef {
                 since: ctx.options.since,
                 until: ctx.options.until,
             };
+            // Never answers, so a caller can prove that cancelling a search
+            // tears down this plugin process instead of leaking it.
+            if query.text == HANG_QUERY {
+                std::future::pending::<()>().await;
+            }
             TypedResult::ok(vec![record("search-result", "search", Some(query.text))])
         },
     )

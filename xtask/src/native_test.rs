@@ -6,6 +6,7 @@ use serde_json::Value;
 use crate::Result;
 use crate::cloud_test_support::TempDir;
 use crate::native_test_codemode::assert_durable_lifecycle;
+use crate::native_test_plugin::assert_plugin_process_cancellation;
 use crate::native_test_process::{RunOutput, ServerProcess, run_comsat};
 
 const FIXTURE_SOURCE: &str = "fixture-source";
@@ -23,6 +24,7 @@ pub fn run(root: &Path) -> Result<()> {
     assert_invalid_invocation(&env)?;
     assert_partial_and_strict(&env)?;
     assert_self_host_watch_history(root, &env)?;
+    assert_plugin_process_cancellation(&env)?;
     Ok(())
 }
 

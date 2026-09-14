@@ -190,5 +190,8 @@ fn invalid_query(source: SourceId, message: impl Into<String>) -> SourceError {
     SourceError::new(source, ErrorClass::InvalidQuery, message)
 }
 
+// The module file cannot live in a `target/` directory: that name is the build
+// output pattern this repository ignores, so the file would never be committed.
 #[cfg(test)]
+#[path = "target_tests.rs"]
 mod tests;
