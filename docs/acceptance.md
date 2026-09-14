@@ -10,8 +10,8 @@ Apoc execution IDs refer to durable local command receipts and their output.
 | B: Unix composition | Strict GitHub plus unconfigured Web returned a valid GitHub record on stdout, diagnostics on stderr, and exit 3; `01a09c87-b103-7d21-8066-74aa20f42ed0` | Passed |
 | C: fetch composition | Live GitHub search piped into fetch and `jq`; `01a09c86-a714-7d52-a9ac-f48cf72c7091`. Web search/fetch is covered by fixtures. | GitHub live passed; Web live pending provider key |
 | D: MCP | Installed native stdio initialize and tools/list; `01a09cb8-9919-7ba0-a5cc-42fcd2c6fa20`. Deployed MCP and HTTP returned the same HN record; `01a09cba-d748-7051-964a-ddc121fb243b`. | Passed |
-| E: Code Mode | Production CLI policy composed fixture search/fetch/follow; `01a09ced-3162-7df0-843f-33f0bf39d019`. Installed CLI completed live HN search/fetch with record `hacker-news:22238335`; `01a09cf0-b982-7833-823b-c603ad59cdb3`. | Fixture and live integration passed |
-| F: external source | Independently built Rust Agent Plugin loaded over real stdio MCP; searched Record targets passed fetch/follow through the loader. | Integration passed |
+| E: Code Mode | Production CLI policy composed fixture search/fetch/follow; `01a09ced-3162-7df0-843f-33f0bf39d019`. Installed CLI completed live HN search/fetch with record `hacker-news:22238335`; `01a09cf0-b982-7833-823b-c603ad59cdb3`. Durable lifecycle, approval, rollback, and prune are proven across separate processes by `cargo xtask native-test`. | Fixture and live integration passed |
+| F: external source | Independently built Rust Agent Plugin loaded over real stdio MCP; searched Record targets passed fetch/follow through the loader. Cancelling the caller of a hanging plugin search leaves no plugin process behind. | Integration passed |
 | G: self-host | `cargo xtask native-test` ran an actual one-process server, scheduled a fixture watch, and read canonical history JSONL from SQLite. | Passed |
 | H: managed | Real Cron, Queue, Worker, and remote D1 after migration 0002 produced `hacker-news:22238335`; history remained isolated from a second tenant. `01a09ce9-f188-76c3-bedf-313fd8ef372e`. | Passed |
 
@@ -89,6 +89,19 @@ database. The cloud MCP protocol family is limited to what the pinned Incurs
 adapter supports.
 HTTP/MCP aggregate responses are bounded and collected by that adapter; native
 JSONL output streams progressively.
+
+## Deployed v1 build
+
+Worker version `8b1b405e-8cd8-4c9c-98e3-56fd5f692415` carries the v1 work:
+corrected MCP transport, the full GitHub object coverage, the shared `serve`
+command graph, and D1 migration `0003_codemode_executions.sql`. Apoc receipt
+`01a09d79-ebaf-78d2-97d3-ce1a4f450799` probed it directly and passed every
+check: MCP initialize and tools/list, camelCase read-only annotations and
+object-root output schemas on all nine read-only tools, live MCP and HTTP
+search and fetch returning `hacker-news:22238335`, live GitHub repository
+search returning only `repository` records, and GitHub Discussions reporting a
+structured `authentication` diagnostic with exit code 3 because the managed
+deployment has no GitHub token configured.
 
 ## MCP 2025-11-25 tool contracts
 
