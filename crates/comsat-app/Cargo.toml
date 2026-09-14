@@ -26,6 +26,7 @@ tokio = { workspace = true, features = ["macros", "rt"] }
 [features]
 default = ["native-runtime"]
 native-runtime = ["incurs/cli", "incurs/mcp"]
+serve = ["native-runtime", "incurs/http", "tokio/net", "tokio/time"]
 
 [dev-dependencies]
 incurs-codemode.workspace = true

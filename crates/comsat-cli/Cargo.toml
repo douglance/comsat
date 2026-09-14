@@ -12,7 +12,7 @@ path = "src/main.rs"
 
 [dependencies]
 async-trait.workspace = true
-comsat-app = { path = "../comsat-app" }
+comsat-app = { path = "../comsat-app", features = ["serve"] }
 comsat-engine = { path = "../comsat-engine" }
 comsat-source = { path = "../comsat-source" }
 comsat-store = { path = "../comsat-store" }

@@ -6,7 +6,7 @@ original object so a consumer can inspect the evidence.
 
 | Source ID | Search | Fetch | Follow | Native target |
 | --- | --- | --- | --- | --- |
-| `github` | Public issues and pull requests through GitHub REST | Issue or pull request details | Issue discussion comments | `owner/repo#number` |
+| `github` | Issues and pull requests, repositories (`type:repo`), or discussions (`type:discussion`) | Issue, pull request, repository, or discussion details | Issue comments; a pull request also yields its reviews and review comments; a repository yields its discussions; a discussion yields its comments | `owner/repo`, `owner/repo#number`, `owner/repo/discussions/number` |
 | `hacker-news` | Stories/comments through Algolia's HN search index | Official Firebase item | Direct child comments, fetched progressively | Numeric item ID |
 | `stack-exchange` | Questions on the configured site | Question details | Answers to the question | Numeric question ID on the configured site |
 | `web` | Configured Brave search provider | Public HTTP(S) page content | Unsupported | Absolute URL |
@@ -16,9 +16,15 @@ of up to 50 related objects. HN follow retrieves up to 50 direct children. Searc
 limits are at most 50 for GitHub, HN, and Stack Exchange and 20 for Web; larger
 requests return an explicit error. These limits keep source work bounded.
 
-GitHub repository search, review-specific traversal, and GitHub Discussions are
-not implemented in this version. The web provider does not currently implement
-the common `since`/`until` bounds and rejects them explicitly.
+The GitHub object class is selected with a `type:` term in the query text:
+`type:repo` searches repositories and `type:discussion` searches discussions.
+Any other query searches issues and pull requests, so GitHub's own `type:issue`
+and `type:pr` qualifiers keep their meaning. GitHub exposes repository
+discussions only through its GraphQL API, so discussion search, discussion
+fetch, and discussion follow require `COMSAT_GITHUB_TOKEN` or `GITHUB_TOKEN`;
+without one they return a structured authentication error and make no upstream
+request. The web provider does not currently implement the common
+`since`/`until` bounds and rejects them explicitly.
 
 ## Native credentials
 

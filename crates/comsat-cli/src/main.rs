@@ -7,24 +7,14 @@ mod notifications;
 mod output;
 mod plugins;
 
-use std::{
-    env, io,
-    net::SocketAddr,
-    sync::Arc,
-    time::{Duration, SystemTime},
-};
+use std::{env, io, net::SocketAddr, sync::Arc, time::SystemTime};
 
-use comsat_app::{ComsatApp, TargetStream, TargetStreamProvider, build_cli};
+use comsat_app::{ComsatApp, ServeHooks, TargetStream, TargetStreamProvider, build_serving_cli};
 use comsat_engine::{CatalogSource, SourceCatalog};
 use comsat_source::{HttpClient, SourceRuntime, source_commands};
 use comsat_types::{Record, Target};
 use futures::SinkExt;
 use incurs::cli::Cli;
-use incurs::{
-    command::{CommandContext, CommandDef, CommandHandler},
-    output::CommandResult,
-};
-use serde::Deserialize;
 
 use http_client::{SecureHttpClient, enable_serve_logging};
 use native_store::{LazySqliteStore, database_path};
@@ -55,9 +45,23 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 fn native_cli(app: Arc<ComsatApp>) -> Cli {
-    build_cli(Arc::clone(&app))
-        .group(codemode::group(Arc::clone(&app)))
-        .command("serve", serve_command(app))
+    build_serving_cli(Arc::clone(&app), Arc::new(NativeServeHooks)).group(codemode::group(app))
+}
+
+/// Native deployment behavior for the shared `serve` command: log outbound
+/// source transport, report catalog metrics, and flush queued notifications.
+struct NativeServeHooks;
+
+#[async_trait::async_trait]
+impl ServeHooks for NativeServeHooks {
+    fn started(&self, _address: SocketAddr) {
+        enable_serve_logging();
+    }
+
+    async fn after_watch_tick(&self, app: &ComsatApp) {
+        log_catalog_metrics(app);
+        notifications::deliver_pending(app).await;
+    }
 }
 
 async fn build_app() -> Result<ComsatApp, Box<dyn std::error::Error>> {
@@ -232,106 +236,6 @@ fn parse_stdin_target(line: &str, line_number: usize) -> Result<Target, String> 
     Ok(target)
 }
 
-fn serve_command(app: Arc<ComsatApp>) -> CommandDef {
-    CommandDef::build("serve", ServeCommand { app })
-        .description("Run COMSAT HTTP and watch scheduler")
-        .done()
-}
-
-#[derive(Debug, Deserialize, incurs::Options)]
-struct ServeOptions {
-    addr: Option<String>,
-}
-
-struct ServeCommand {
-    app: Arc<ComsatApp>,
-}
-
-#[async_trait::async_trait]
-impl CommandHandler for ServeCommand {
-    async fn run(&self, ctx: CommandContext) -> CommandResult {
-        let options = match serde_json::from_value::<ServeOptions>(ctx.options) {
-            Ok(options) => options,
-            Err(error) => return serve_error("invalid_query", error, false, 2),
-        };
-        let address = match serve_address(options.addr) {
-            Ok(address) => address,
-            Err(error) => return serve_error("invalid_query", error, false, 2),
-        };
-        let http_cli = build_cli(Arc::clone(&self.app));
-        enable_serve_logging();
-        match serve_native(Arc::clone(&self.app), &http_cli, address).await {
-            Ok(()) => CommandResult::Ok {
-                data: serde_json::json!({ "listening": address.to_string() }),
-                cta: None,
-                exit_code: None,
-            },
-            Err(error) => serve_error("operational", error, true, 1),
-        }
-    }
-}
-
-fn serve_error(
-    code: impl Into<String>,
-    error: impl std::fmt::Display,
-    retryable: bool,
-    exit_code: i32,
-) -> CommandResult {
-    CommandResult::Error {
-        code: code.into(),
-        message: error.to_string(),
-        retryable,
-        exit_code: Some(exit_code),
-        cta: None,
-    }
-}
-
-async fn serve_native(
-    app: Arc<ComsatApp>,
-    cli: &Cli,
-    address: SocketAddr,
-) -> Result<(), Box<dyn std::error::Error>> {
-    let scheduler = watch_scheduler(app);
-    tokio::pin!(scheduler);
-    tokio::select! {
-        result = incurs::http::serve_http(cli, address) => result,
-        result = &mut scheduler => result,
-    }
-}
-
-async fn watch_scheduler(app: Arc<ComsatApp>) -> Result<(), Box<dyn std::error::Error>> {
-    let mut interval = tokio::time::interval(Duration::from_secs(30));
-    loop {
-        interval.tick().await;
-        match app.run_due_watch_once().await {
-            Ok(Some(outcome)) => eprintln!(
-                "{}",
-                serde_json::json!({
-                    "event": "watch_scheduler_run",
-                    "status": outcome.status,
-                    "run_id": outcome.run_id,
-                    "records_seen": outcome.records_seen,
-                    "records_inserted": outcome.records_inserted,
-                    "watch_records_inserted": outcome.watch_records_inserted
-                })
-            ),
-            Ok(None) => {}
-            Err(error) => {
-                eprintln!(
-                    "{}",
-                    serde_json::json!({
-                        "event": "watch_scheduler_run",
-                        "status": "failed",
-                        "message": error.to_string()
-                    })
-                );
-            }
-        }
-        log_catalog_metrics(&app);
-        notifications::deliver_pending(&app).await;
-    }
-}
-
 fn log_catalog_metrics(app: &ComsatApp) {
     eprintln!(
         "{}",
@@ -352,11 +256,4 @@ fn native_clock() -> Arc<dyn Fn() -> i64 + Send + Sync> {
             .try_into()
             .unwrap_or(i64::MAX)
     })
-}
-
-fn serve_address(address: Option<String>) -> Result<SocketAddr, Box<dyn std::error::Error>> {
-    address
-        .unwrap_or_else(|| "127.0.0.1:8737".to_string())
-        .parse()
-        .map_err(Into::into)
 }

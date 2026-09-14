@@ -3,19 +3,23 @@
 use std::sync::Arc;
 
 mod cooldown;
+mod discussions;
+mod follow;
+mod normalize;
 mod query;
+mod search;
 mod target;
 
 use comsat_source::{
     HttpClient, RecordStream, SourceDescriptor, SourceProfile, SourceRunContext, SourceRuntime,
 };
-use comsat_types::{ErrorClass, Query, Record, SourceError, SourceId, Target};
+use comsat_types::{ErrorClass, Query, Record, SourceError, Target};
 use http::{Request, Response, StatusCode};
-use percent_encoding::{NON_ALPHANUMERIC, utf8_percent_encode};
 use serde::Deserialize;
-use serde_json::{Value, json};
+use serde_json::Value;
 
-const SOURCE_ID: &str = "github";
+use normalize::{error, protocol, source_id};
+use target::GitHubTarget;
 
 #[derive(Clone)]
 pub struct GitHubSource {
@@ -45,62 +49,85 @@ impl GitHubSource {
         )
     }
 
-    async fn search_records(&self, query: Query) -> Result<Vec<Record>, SourceError> {
-        query::ensure_limit(source_id(), query.limit)?;
-        self.cooldowns.check(source_id(), "search")?;
-        let query_text = query::github_query_text(&query);
-        let encoded = utf8_percent_encode(&query_text, NON_ALPHANUMERIC);
-        let limit = query.limit.unwrap_or(10);
-        let url = format!(
-            "https://api.github.com/search/issues?q={encoded}&per_page={limit}&sort=updated&order=desc"
-        );
-        let body = self.checked_body("search", self.client.send(self.get(url)?).await?)?;
-        let search: SearchResponse = parse_json(&body)?;
-        search.items.iter().map(normalize_issue).collect()
-    }
-
     async fn fetch_record(&self, target: Target) -> Result<Record, SourceError> {
         self.cooldowns.check(source_id(), "fetch")?;
-        let target = target::IssueTarget::from_target(source_id(), &target)?;
-        let url = format!(
-            "https://api.github.com/repos/{}/{}/issues/{}",
-            target.encoded_owner(),
-            target.encoded_repo(),
-            target.number
-        );
-        let body = self.checked_body("fetch", self.client.send(self.get(url)?).await?)?;
-        normalize_issue(&parse_json(&body)?)
+        match GitHubTarget::from_target(source_id(), &target)? {
+            GitHubTarget::Repository(repository) => {
+                let url = format!(
+                    "https://api.github.com/repos/{}/{}",
+                    repository.encoded_owner(),
+                    repository.encoded_repo()
+                );
+                normalize::repository(&self.rest("fetch", url).await?)
+            }
+            GitHubTarget::Issue {
+                repository, number, ..
+            } => {
+                let url = format!(
+                    "https://api.github.com/repos/{}/{}/issues/{number}",
+                    repository.encoded_owner(),
+                    repository.encoded_repo()
+                );
+                normalize::issue(&self.rest("fetch", url).await?)
+            }
+            GitHubTarget::Discussion { repository, number } => {
+                let data = self
+                    .graphql("fetch", &discussions::fetch_request(&repository, number))
+                    .await?;
+                let discussion = discussions::node(&data, "/repository/discussion")?;
+                discussions::discussion_record(&discussion, &repository)
+            }
+        }
     }
 
-    async fn follow_records(&self, target: Target) -> Result<Vec<Record>, SourceError> {
-        self.cooldowns.check(source_id(), "follow")?;
-        let target = target::IssueTarget::from_target(source_id(), &target)?;
-        let url = format!(
-            "https://api.github.com/repos/{}/{}/issues/{}/comments?per_page={}",
-            target.encoded_owner(),
-            target.encoded_repo(),
-            target.number,
-            query::MAX_LIMIT
-        );
-        let body = self.checked_body("follow", self.client.send(self.get(url)?).await?)?;
-        let comments: Vec<IssueComment> = parse_json(&body)?;
-        comments
-            .iter()
-            .map(|comment| normalize_comment(comment, &target))
-            .collect()
+    /// Sends one GET to the REST API and deserializes its body.
+    async fn rest<T: for<'de> Deserialize<'de>>(
+        &self,
+        operation: &'static str,
+        url: String,
+    ) -> Result<T, SourceError> {
+        let body = self.checked_body(operation, self.client.send(self.get(url)?).await?)?;
+        serde_json::from_slice(&body).map_err(protocol)
+    }
+
+    /// Sends one GraphQL request. Discussions are only reachable this way, and
+    /// the GraphQL API rejects unauthenticated callers.
+    async fn graphql(
+        &self,
+        operation: &'static str,
+        request: &Value,
+    ) -> Result<Value, SourceError> {
+        if self.token.is_none() {
+            return Err(error(
+                ErrorClass::Authentication,
+                "GitHub Discussions require COMSAT_GITHUB_TOKEN or GITHUB_TOKEN",
+            ));
+        }
+        let body = serde_json::to_vec(request).map_err(protocol)?;
+        let request = self
+            .request("POST", discussions::GRAPHQL_URL.to_owned())
+            .body(body)
+            .map_err(protocol)?;
+        let response = self.checked_body(operation, self.client.send(request).await?)?;
+        discussions::payload(&response)
     }
 
     fn get(&self, url: String) -> Result<Request<Vec<u8>>, SourceError> {
+        self.request("GET", url).body(Vec::new()).map_err(protocol)
+    }
+
+    fn request(&self, method: &str, url: String) -> http::request::Builder {
         let mut builder = Request::builder()
-            .method("GET")
+            .method(method)
             .uri(url)
             .header("accept", "application/vnd.github+json")
+            .header("content-type", "application/json")
             .header("user-agent", "comsat")
             .header("x-github-api-version", "2022-11-28");
         if let Some(token) = &self.token {
             builder = builder.header("authorization", format!("Bearer {token}"));
         }
-        builder.body(Vec::new()).map_err(protocol)
+        builder
     }
 
     fn checked_body(
@@ -149,100 +176,6 @@ impl SourceRuntime for GitHubSource {
     }
 }
 
-#[derive(Debug, Deserialize)]
-struct SearchResponse {
-    items: Vec<Issue>,
-}
-
-#[derive(Debug, Deserialize)]
-struct Issue {
-    id: u64,
-    node_id: Option<String>,
-    html_url: String,
-    title: String,
-    body: Option<String>,
-    user: Option<User>,
-    created_at: Option<String>,
-    updated_at: Option<String>,
-    number: u64,
-    state: Option<String>,
-    comments: Option<u64>,
-    repository_url: Option<String>,
-    pull_request: Option<Value>,
-}
-
-#[derive(Debug, Deserialize)]
-struct IssueComment {
-    id: u64,
-    node_id: Option<String>,
-    html_url: String,
-    body: Option<String>,
-    user: Option<User>,
-    created_at: Option<String>,
-    updated_at: Option<String>,
-    reactions: Option<Value>,
-}
-
-#[derive(Debug, Deserialize)]
-struct User {
-    login: String,
-}
-
-fn normalize_issue(issue: &Issue) -> Result<Record, SourceError> {
-    let repository = issue
-        .repository_url
-        .as_deref()
-        .and_then(|url| url.strip_prefix("https://api.github.com/repos/"));
-    let kind = if issue.pull_request.is_some() {
-        "pull-request"
-    } else {
-        "issue"
-    };
-    record(json!({
-        "id": issue.node_id.clone().unwrap_or_else(|| format!("github:issue:{}", issue.id)),
-        "source": SOURCE_ID,
-        "kind": kind,
-        "url": issue.html_url,
-        "title": issue.title,
-        "text": issue.body,
-        "author": issue.user.as_ref().map(|user| user.login.as_str()),
-        "created_at": issue.created_at,
-        "updated_at": issue.updated_at,
-        "metadata": {
-            "github_id": issue.id,
-            "node_id": issue.node_id,
-            "repository": repository,
-            "number": issue.number,
-            "state": issue.state,
-            "comments": issue.comments
-        }
-    }))
-}
-
-fn normalize_comment(
-    comment: &IssueComment,
-    issue: &target::IssueTarget,
-) -> Result<Record, SourceError> {
-    record(json!({
-        "id": comment.node_id.clone().unwrap_or_else(|| format!("github:comment:{}", comment.id)),
-        "source": SOURCE_ID,
-        "kind": "issue-comment",
-        "url": comment.html_url,
-        "title": null,
-        "text": comment.body,
-        "author": comment.user.as_ref().map(|user| user.login.as_str()),
-        "created_at": comment.created_at,
-        "updated_at": comment.updated_at,
-        "metadata": {
-            "github_id": comment.id,
-            "node_id": comment.node_id,
-            "repository": format!("{}/{}", issue.owner, issue.repo),
-            "number": issue.number,
-            "reactions": comment.reactions
-        }
-    }))
-}
-
 fn checked_body(response: Response<Vec<u8>>) -> Result<Vec<u8>, SourceError> {
     let status = response.status();
     let retry_after = response
@@ -270,24 +203,4 @@ fn checked_body(response: Response<Vec<u8>>) -> Result<Vec<u8>, SourceError> {
             format!("GitHub returned HTTP {status}"),
         )),
     }
-}
-
-fn parse_json<T: for<'de> Deserialize<'de>>(body: &[u8]) -> Result<T, SourceError> {
-    serde_json::from_slice(body).map_err(protocol)
-}
-
-fn record(value: Value) -> Result<Record, SourceError> {
-    serde_json::from_value(value).map_err(protocol)
-}
-
-fn source_id() -> SourceId {
-    SourceId::new(SOURCE_ID).expect("static source id is valid")
-}
-
-fn error(class: ErrorClass, message: impl Into<String>) -> SourceError {
-    SourceError::new(source_id(), class, message)
-}
-
-fn protocol(message: impl std::fmt::Display) -> SourceError {
-    error(ErrorClass::Protocol, message.to_string())
 }

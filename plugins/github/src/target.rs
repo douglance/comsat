@@ -2,37 +2,30 @@ use comsat_types::{ErrorClass, SourceError, SourceId, Target};
 use percent_encoding::{NON_ALPHANUMERIC, utf8_percent_encode};
 use url::Url;
 
-#[derive(Debug)]
-pub struct IssueTarget {
-    pub owner: String,
-    pub repo: String,
-    pub number: u64,
+/// A GitHub object a fetch or follow can address.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum GitHubTarget {
+    Repository(RepositoryRef),
+    /// An issue or pull request. `pull_request` is known only when the address
+    /// said so; otherwise the source asks GitHub.
+    Issue {
+        repository: RepositoryRef,
+        number: u64,
+        pull_request: Option<bool>,
+    },
+    Discussion {
+        repository: RepositoryRef,
+        number: u64,
+    },
 }
 
-impl IssueTarget {
-    pub fn from_target(source: SourceId, target: &Target) -> Result<Self, SourceError> {
-        match target {
-            Target::Record { record } => {
-                ensure_source(source.clone(), &record.source)?;
-                parse_issue_url(source, &record.url)
-            }
-            Target::Url {
-                source: target_source,
-                url,
-            } => {
-                ensure_source(source.clone(), target_source)?;
-                parse_issue_url(source, url)
-            }
-            Target::Native {
-                source: target_source,
-                id,
-            } => {
-                ensure_source(source.clone(), target_source)?;
-                parse_native_issue(source, id)
-            }
-        }
-    }
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RepositoryRef {
+    pub owner: String,
+    pub repo: String,
+}
 
+impl RepositoryRef {
     pub fn encoded_owner(&self) -> String {
         path_segment(&self.owner)
     }
@@ -40,35 +33,64 @@ impl IssueTarget {
     pub fn encoded_repo(&self) -> String {
         path_segment(&self.repo)
     }
+
+    pub fn name_with_owner(&self) -> String {
+        format!("{}/{}", self.owner, self.repo)
+    }
 }
 
-fn parse_native_issue(source: SourceId, value: &str) -> Result<IssueTarget, SourceError> {
-    let Some((repo, number)) = value.rsplit_once('#') else {
-        return Err(invalid_query(
-            source,
-            "GitHub native id must be owner/repo#number",
-        ));
-    };
-    let Some((owner, repo)) = repo.split_once('/') else {
-        return Err(invalid_query(
-            source,
-            "GitHub native id must be owner/repo#number",
-        ));
-    };
-    validate_segment(source.clone(), owner)?;
-    validate_segment(source.clone(), repo)?;
-    let number = number
-        .parse()
-        .map_err(|_| invalid_query(source.clone(), "GitHub target number is invalid"))?;
-    validate_number(source, number)?;
-    Ok(IssueTarget {
-        owner: owner.to_owned(),
-        repo: repo.to_owned(),
-        number,
-    })
+impl GitHubTarget {
+    pub fn from_target(source: SourceId, target: &Target) -> Result<Self, SourceError> {
+        match target {
+            Target::Record { record } => {
+                ensure_source(source.clone(), &record.source)?;
+                parse_url(source, &record.url)
+            }
+            Target::Url {
+                source: target_source,
+                url,
+            } => {
+                ensure_source(source.clone(), target_source)?;
+                parse_url(source, url)
+            }
+            Target::Native {
+                source: target_source,
+                id,
+            } => {
+                ensure_source(source.clone(), target_source)?;
+                parse_native(source, id)
+            }
+        }
+    }
 }
 
-fn parse_issue_url(source: SourceId, value: &str) -> Result<IssueTarget, SourceError> {
+/// Native ids: `owner/repo`, `owner/repo#number`, `owner/repo/discussions/number`.
+fn parse_native(source: SourceId, value: &str) -> Result<GitHubTarget, SourceError> {
+    if let Some((repository, number)) = value.rsplit_once('#') {
+        let repository = repository_ref(source.clone(), repository)?;
+        return Ok(GitHubTarget::Issue {
+            repository,
+            number: parse_number(source, number)?,
+            pull_request: None,
+        });
+    }
+    let segments = value.split('/').collect::<Vec<_>>();
+    match segments.as_slice() {
+        [owner, repo] => Ok(GitHubTarget::Repository(named_repository(
+            source, owner, repo,
+        )?)),
+        [owner, repo, "discussions", number] => Ok(GitHubTarget::Discussion {
+            repository: named_repository(source.clone(), owner, repo)?,
+            number: parse_number(source, number)?,
+        }),
+        _ => Err(invalid_query(
+            source,
+            "GitHub native id must be owner/repo, owner/repo#number, or owner/repo/discussions/number",
+        )),
+    }
+}
+
+fn parse_url(source: SourceId, value: &str) -> Result<GitHubTarget, SourceError> {
     let url = Url::parse(value).map_err(|error| {
         SourceError::new(source.clone(), ErrorClass::Protocol, error.to_string())
     })?;
@@ -83,24 +105,58 @@ fn parse_issue_url(source: SourceId, value: &str) -> Result<IssueTarget, SourceE
         .path_segments()
         .map(Iterator::collect::<Vec<_>>)
         .unwrap_or_default();
-    if segments.len() < 4 || !matches!(segments[2], "issues" | "pull") {
-        return Err(SourceError::new(
+    match segments.as_slice() {
+        [owner, repo] => Ok(GitHubTarget::Repository(named_repository(
+            source, owner, repo,
+        )?)),
+        [owner, repo, kind @ ("issues" | "pull"), number] => Ok(GitHubTarget::Issue {
+            repository: named_repository(source.clone(), owner, repo)?,
+            number: parse_number(source, number)?,
+            pull_request: Some(*kind == "pull"),
+        }),
+        [owner, repo, "discussions", number] => Ok(GitHubTarget::Discussion {
+            repository: named_repository(source.clone(), owner, repo)?,
+            number: parse_number(source, number)?,
+        }),
+        _ => Err(SourceError::new(
             source,
             ErrorClass::Unsupported,
-            "target URL is not a GitHub issue or pull request",
-        ));
+            "target URL is not a GitHub repository, issue, pull request, or discussion",
+        )),
     }
-    validate_segment(source.clone(), segments[0])?;
-    validate_segment(source.clone(), segments[1])?;
-    let number = segments[3]
+}
+
+fn repository_ref(source: SourceId, value: &str) -> Result<RepositoryRef, SourceError> {
+    let Some((owner, repo)) = value.split_once('/') else {
+        return Err(invalid_query(
+            source,
+            "GitHub native id must name owner/repo",
+        ));
+    };
+    named_repository(source, owner, repo)
+}
+
+fn named_repository(
+    source: SourceId,
+    owner: &str,
+    repo: &str,
+) -> Result<RepositoryRef, SourceError> {
+    validate_segment(source.clone(), owner)?;
+    validate_segment(source, repo)?;
+    Ok(RepositoryRef {
+        owner: owner.to_owned(),
+        repo: repo.to_owned(),
+    })
+}
+
+fn parse_number(source: SourceId, value: &str) -> Result<u64, SourceError> {
+    let number = value
         .parse()
         .map_err(|_| invalid_query(source.clone(), "GitHub target number is invalid"))?;
-    validate_number(source, number)?;
-    Ok(IssueTarget {
-        owner: segments[0].to_owned(),
-        repo: segments[1].to_owned(),
-        number,
-    })
+    if number == 0 {
+        return Err(invalid_query(source, "GitHub target number is invalid"));
+    }
+    Ok(number)
 }
 
 fn ensure_source(source: SourceId, target_source: &SourceId) -> Result<(), SourceError> {
@@ -126,13 +182,6 @@ fn validate_segment(source: SourceId, value: &str) -> Result<(), SourceError> {
     ))
 }
 
-fn validate_number(source: SourceId, number: u64) -> Result<(), SourceError> {
-    if number > 0 {
-        return Ok(());
-    }
-    Err(invalid_query(source, "GitHub target number is invalid"))
-}
-
 fn path_segment(value: &str) -> String {
     utf8_percent_encode(value, NON_ALPHANUMERIC).to_string()
 }
@@ -142,28 +191,4 @@ fn invalid_query(source: SourceId, message: impl Into<String>) -> SourceError {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn source() -> SourceId {
-        SourceId::new("github").unwrap()
-    }
-
-    #[test]
-    fn rejects_mismatched_target_source() {
-        let target = Target::Native {
-            source: SourceId::new("web").unwrap(),
-            id: "owner/repo#1".into(),
-        };
-        assert!(IssueTarget::from_target(source(), &target).is_err());
-    }
-
-    #[test]
-    fn rejects_unsafe_native_segments() {
-        let target = Target::Native {
-            source: source(),
-            id: "../repo#1".into(),
-        };
-        assert!(IssueTarget::from_target(source(), &target).is_err());
-    }
-}
+mod tests;
