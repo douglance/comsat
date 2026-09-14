@@ -50,6 +50,15 @@ Search, fetch, follow, and history emit canonical records as JSON Lines. Diagnos
 go to stderr. Search does not save observations. The native distribution includes
 all four first-party sources; web search requires a configured provider key.
 
+GitHub search covers issues and pull requests by default, repositories with
+`type:repo`, and discussions with `type:discussion`; following a pull request
+also returns its reviews and review comments, a repository returns its
+discussions, and a discussion returns its comments.
+
+Code Mode executions are durable. `comsat code run` persists its execution, and
+`comsat code list`, `show`, `events`, `artifact`, `approve`, `reject`, `resume`,
+`cancel`, `rollback`, and `prune` operate on that state from any later process.
+
 Source credentials, supported operations, and bounded result limits are documented
 in [sources](docs/sources.md). Set `COMSAT_PLUGINS` to a platform path list of Incurs
 Agent Plugin directories to load additional sources.
