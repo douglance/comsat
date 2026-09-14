@@ -1,8 +1,8 @@
 //! Public HTML served at `GET /` without authentication.
 
-pub(crate) const HTML: &str = include_str!("landing.html");
+pub const HTML: &str = include_str!("landing.html");
 
-pub(crate) fn is_landing_request(method: &str, path: &str) -> bool {
+pub fn is_landing_request(method: &str, path: &str) -> bool {
     matches!(path, "/" | "/index.html")
         && (method.eq_ignore_ascii_case("GET") || method.eq_ignore_ascii_case("HEAD"))
 }
@@ -19,6 +19,20 @@ mod tests {
         assert!(!is_landing_request("GET", "/health"));
         assert!(!is_landing_request("POST", "/"));
         assert!(!is_landing_request("GET", "/search"));
+    }
+
+    #[test]
+    fn wasm_request_router_still_serves_the_landing_module() {
+        let runtime = include_str!("runtime.rs");
+        let http = include_str!("runtime_http.rs");
+        assert!(
+            runtime.contains("crate::landing::is_landing_request"),
+            "wasm router must keep the public landing request check"
+        );
+        assert!(
+            http.contains("crate::landing::HTML"),
+            "wasm landing response must keep the public HTML body"
+        );
     }
 
     #[test]

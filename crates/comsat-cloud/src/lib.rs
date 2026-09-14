@@ -1,6 +1,8 @@
 #![forbid(unsafe_code)]
 
 pub mod auth;
+
+#[cfg(any(target_arch = "wasm32", test))]
 mod landing;
 
 #[cfg(any(target_arch = "wasm32", test))]
