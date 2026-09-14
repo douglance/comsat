@@ -5,11 +5,14 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Deserialize, JsonSchema)]
 pub struct SearchArgs {
-    pub text: String,
+    #[serde(default)]
+    pub text: Option<String>,
 }
 
 #[derive(Debug, Deserialize, JsonSchema)]
 pub struct SearchOptions {
+    #[serde(default)]
+    pub text: Option<String>,
     pub limit: Option<u32>,
     pub since: Option<String>,
     pub until: Option<String>,

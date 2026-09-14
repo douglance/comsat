@@ -169,3 +169,57 @@ async fn hacker_news_source_conforms_with_fixtures() {
     assert!(report.error_checked);
     assert!(report.cancellation_checked);
 }
+
+#[tokio::test]
+async fn hacker_news_over_limit_names_the_numeric_cap() {
+    let http = Arc::new(MockHttp::new(Vec::new()));
+    let source: Arc<dyn SourceRuntime> = Arc::new(HackerNewsSource::new(http));
+    let query = Query {
+        text: "serde".into(),
+        limit: Some(51),
+        since: None,
+        until: None,
+    };
+
+    let error = source
+        .search(query, SourceRunContext::default())
+        .await
+        .next()
+        .await
+        .unwrap()
+        .unwrap_err();
+
+    assert_eq!(error.class, ErrorClass::InvalidQuery);
+    assert!(
+        error.message.contains("50"),
+        "limit diagnostic should name the numeric cap: {}",
+        error.message
+    );
+    assert!(
+        !error.message.contains("{MAX_LIMIT}"),
+        "limit diagnostic should interpolate the cap: {}",
+        error.message
+    );
+}
+
+#[tokio::test]
+async fn hacker_news_null_firebase_item_is_not_found() {
+    let http = Arc::new(MockHttp::new(vec!["null"]));
+    let source: Arc<dyn SourceRuntime> = Arc::new(HackerNewsSource::new(http));
+    let target = Target::Native {
+        source: SourceId::new("hacker-news").unwrap(),
+        id: "999999999".into(),
+    };
+
+    let error = source
+        .fetch(target, SourceRunContext::default())
+        .await
+        .unwrap_err();
+
+    assert_eq!(error.class, ErrorClass::NotFound);
+    assert!(
+        !error.message.contains("invalid type"),
+        "missing item should not be a protocol decode: {}",
+        error.message
+    );
+}

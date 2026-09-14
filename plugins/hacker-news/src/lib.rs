@@ -64,7 +64,7 @@ impl HackerNewsSource {
     async fn fetch_item(&self, id: u64) -> Result<Item, SourceError> {
         let url = format!("https://hacker-news.firebaseio.com/v0/item/{id}.json");
         let body = checked_body(self.client.send(get(url)?).await?)?;
-        parse_json(&body)
+        parse_item(&body)
     }
 }
 
@@ -227,7 +227,7 @@ fn ensure_limit(limit: Option<u32>) -> Result<(), SourceError> {
         return Err(SourceError::new(
             source_id(),
             ErrorClass::InvalidQuery,
-            "Hacker News source supports at most {MAX_LIMIT} results per search",
+            format!("Hacker News source supports at most {MAX_LIMIT} results per search"),
         ));
     }
     Ok(())
@@ -262,6 +262,17 @@ fn checked_body(response: Response<Vec<u8>>) -> Result<Vec<u8>, SourceError> {
 
 fn parse_json<T: for<'de> Deserialize<'de>>(body: &[u8]) -> Result<T, SourceError> {
     serde_json::from_slice(body).map_err(protocol)
+}
+
+fn parse_item(body: &[u8]) -> Result<Item, SourceError> {
+    let value: Value = parse_json(body)?;
+    if value.is_null() {
+        return Err(error(
+            ErrorClass::NotFound,
+            "Hacker News item was not found",
+        ));
+    }
+    serde_json::from_value(value).map_err(protocol)
 }
 
 fn record(value: Value) -> Result<Record, SourceError> {

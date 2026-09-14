@@ -99,7 +99,9 @@ impl CommandHandler for SearchCommand {
         };
         let expected_sources = selected_source_count(&self.app, &sources);
         let query = Query {
-            text: args.text,
+            text: nonempty_text(args.text)
+                .or_else(|| nonempty_text(input.text))
+                .unwrap_or_default(),
             limit: input.limit,
             since: input.since,
             until: input.until,
@@ -327,6 +329,10 @@ fn selected_source_count(app: &ComsatApp, sources: &[SourceId]) -> usize {
     } else {
         sources.iter().collect::<BTreeSet<_>>().len()
     }
+}
+
+fn nonempty_text(text: Option<String>) -> Option<String> {
+    text.filter(|value| !value.is_empty())
 }
 
 fn search_options(value: Value) -> Result<SearchOptions, String> {

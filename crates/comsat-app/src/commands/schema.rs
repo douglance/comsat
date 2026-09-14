@@ -81,11 +81,12 @@ fn source_error_schema() -> Value {
 }
 
 pub(super) fn search_args_fields() -> Vec<FieldMeta> {
-    vec![field("text", "text", FieldType::String, true)]
+    vec![field("text", "text", FieldType::String, false)]
 }
 
 pub(super) fn search_fields() -> Vec<FieldMeta> {
     vec![
+        field("text", "text", FieldType::String, false),
         field("limit", "limit", FieldType::Number, false),
         field("since", "since", FieldType::String, false),
         field("until", "until", FieldType::String, false),

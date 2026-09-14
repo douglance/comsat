@@ -1,5 +1,5 @@
 use std::{
-    io::{BufRead, BufReader, Write},
+    io::{BufRead, BufReader, Read, Write},
     path::{Path, PathBuf},
     process::{Child, Command, Output, Stdio},
     sync::mpsc::{self, Receiver},
@@ -154,6 +154,112 @@ stderr:
         state["log"].as_array().is_some_and(|log| !log.is_empty()),
         "{state}"
     );
+}
+
+#[test]
+fn unknown_command_exits_as_invalid_invocation() {
+    let data_dir = temp_dir("unknown-command");
+    let output = comsat(&data_dir)
+        .args(["blorp"])
+        .output()
+        .expect("unknown command should run");
+    assert_eq!(
+        output.status.code(),
+        Some(2),
+        "stdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(
+        output.stdout.is_empty(),
+        "{}",
+        String::from_utf8_lossy(&output.stdout)
+    );
+    assert!(
+        String::from_utf8_lossy(&output.stderr).contains("COMMAND_NOT_FOUND"),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+#[test]
+fn serve_http_search_accepts_json_text() {
+    let data_dir = temp_dir("http-search");
+    let port = 19_000 + u16::try_from(std::process::id() % 1_000).expect("port fits u16");
+    let addr = format!("127.0.0.1:{port}");
+    let mut child = comsat(&data_dir)
+        .args(["serve", "--addr", &addr])
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("serve should spawn");
+    let started = wait_for_port(port, &mut child);
+    if let Err(error) = started {
+        stop_child(child);
+        panic!("{error}");
+    }
+
+    let body = serde_json::json!({
+        "text": "pinned runtime",
+        "source": ["fixture-source"],
+        "limit": 1
+    });
+    let response = http_post_json(&addr, "/search", &body);
+    stop_child(child);
+    assert_eq!(response.status, 200, "{}", response.body);
+    assert!(
+        response.body.contains("fixture:search") || response.body.contains("pinned runtime"),
+        "HTTP search should bind JSON text: {}",
+        response.body
+    );
+}
+
+fn wait_for_port(port: u16, child: &mut Child) -> Result<(), String> {
+    for _ in 0..80 {
+        if std::net::TcpStream::connect(("127.0.0.1", port)).is_ok() {
+            return Ok(());
+        }
+        if child
+            .try_wait()
+            .expect("serve should be observable")
+            .is_some()
+        {
+            return Err("serve exited before listening".into());
+        }
+        std::thread::sleep(Duration::from_millis(50));
+    }
+    Err(format!("serve did not listen on 127.0.0.1:{port}"))
+}
+
+struct HttpResponse {
+    status: u16,
+    body: String,
+}
+
+fn http_post_json(addr: &str, path: &str, body: &Value) -> HttpResponse {
+    let payload = body.to_string();
+    let mut stream = std::net::TcpStream::connect(addr).expect("serve should accept");
+    write!(
+        stream,
+        "POST {path} HTTP/1.1\r\nHost: {addr}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{payload}",
+        payload.len()
+    )
+    .expect("HTTP request should write");
+    stream.flush().expect("HTTP request should flush");
+    let mut raw = String::new();
+    stream
+        .read_to_string(&mut raw)
+        .expect("HTTP response should read");
+    let (head, body) = raw.split_once("\r\n\r\n").unwrap_or((raw.as_str(), ""));
+    let status = head
+        .split_whitespace()
+        .nth(1)
+        .and_then(|token| token.parse().ok())
+        .unwrap_or(0);
+    HttpResponse {
+        status,
+        body: body.to_owned(),
+    }
 }
 
 #[test]

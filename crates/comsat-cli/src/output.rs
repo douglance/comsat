@@ -81,7 +81,11 @@ impl<W: Write, E: Write> UnixOutput<W, E> {
         };
         self.invalid_invocation |= matches!(
             code,
-            "VALIDATION_ERROR" | "UNKNOWN_COMMAND" | "UNKNOWN_OPTION" | "PARSE_ERROR"
+            "VALIDATION_ERROR"
+                | "UNKNOWN_COMMAND"
+                | "COMMAND_NOT_FOUND"
+                | "UNKNOWN_OPTION"
+                | "PARSE_ERROR"
         );
         if error.get("message").is_none() || value.get("id").is_some() {
             return Ok(false);
@@ -193,5 +197,25 @@ mod tests {
         assert!(writer.invalid_invocation());
         assert!(output.is_empty());
         assert_eq!(serde_json::from_slice::<Value>(&errors).unwrap(), error);
+    }
+
+    #[test]
+    fn command_not_found_marks_invalid_invocation() {
+        let mut output = Vec::new();
+        let mut errors = Vec::new();
+        let mut writer = UnixOutput::new(&mut output, &mut errors);
+        writer
+            .write_all(
+                b"{\"code\":\"COMMAND_NOT_FOUND\",\"message\":\"'blorp' is not a command for 'comsat'.\"}\n",
+            )
+            .unwrap();
+        writer.finish().unwrap();
+        assert!(writer.invalid_invocation());
+        assert!(output.is_empty());
+        assert!(
+            String::from_utf8(errors)
+                .unwrap()
+                .contains("COMMAND_NOT_FOUND")
+        );
     }
 }
