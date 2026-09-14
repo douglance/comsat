@@ -8,7 +8,7 @@ Apoc execution IDs refer to durable local command receipts and their output.
 | --- | --- | --- |
 | A: CLI search | Live GitHub and HN positional queries piped into `jq`; `01a09c86-618c-7251-b9dd-89d39087dcce`, `01a09c86-a4e7-7c91-ab1d-ed930396f214` | Passed |
 | B: Unix composition | Strict GitHub plus unconfigured Web returned a valid GitHub record on stdout, diagnostics on stderr, and exit 3; `01a09c87-b103-7d21-8066-74aa20f42ed0` | Passed |
-| C: fetch composition | Live GitHub search piped into fetch and `jq`; `01a09c86-a714-7d52-a9ac-f48cf72c7091`. Web search/fetch is covered by fixtures. | GitHub live passed; Web live pending provider key |
+| C: fetch composition | Live GitHub search piped into fetch and `jq`; `01a09c86-a714-7d52-a9ac-f48cf72c7091`. Live Brave-backed web search returned `yaak.app` and other results, web fetch returned that page, and search piped into fetch produced record `web:https://yaak.app/`. | Passed |
 | D: MCP | Installed native stdio initialize and tools/list; `01a09cb8-9919-7ba0-a5cc-42fcd2c6fa20`. Deployed MCP and HTTP returned the same HN record; `01a09cba-d748-7051-964a-ddc121fb243b`. | Passed |
 | E: Code Mode | Production CLI policy composed fixture search/fetch/follow; `01a09ced-3162-7df0-843f-33f0bf39d019`. Installed CLI completed live HN search/fetch with record `hacker-news:22238335`; `01a09cf0-b982-7833-823b-c603ad59cdb3`. Durable lifecycle, approval, rollback, and prune are proven across separate processes by `cargo xtask native-test`. | Fixture and live integration passed |
 | F: external source | Independently built Rust Agent Plugin loaded over real stdio MCP; searched Record targets passed fetch/follow through the loader. Cancelling the caller of a hanging plugin search leaves no plugin process behind. | Integration passed |
@@ -65,10 +65,11 @@ uses the canonical command graph, including relative `since=30d` filtering.
 
 ## Limits that remain explicit
 
-Web search needs a configured provider key before its live acceptance scenario can
-pass. GitHub repository search, review-specific traversal, and Discussions are not
-implemented. See [source behavior](sources.md) for the exact operation mapping and
-bounded result limits.
+Web search is live-proven against the configured Brave provider, natively and on
+the deployed Worker. GitHub repositories, repository discussions, and
+pull-request review discussions are implemented; see
+[source behavior](sources.md) for the exact operation mapping and bounded result
+limits.
 
 The managed Stack Exchange egress IP was throttled by the upstream API during
 live acceptance. The official error envelope is preserved as `rate_limit`, with
@@ -122,6 +123,20 @@ the authenticated HTTP surface was claimed by Cron, executed through the Queue,
 and persisted two Hacker News records to remote D1, readable through
 `/history?watch=…`, with the watch rescheduled an hour out. The proof watch was
 deleted afterwards and no watch remains active.
+
+## Live web retrieval
+
+A Brave Search provider key is configured natively and as the deployed Worker's
+`BRAVE_SEARCH_API_KEY` secret. Natively, live web search for a desktop API
+client returned `https://yaak.app/` among its results, live web fetch returned
+that page with title `Yaak - The local-first API client`, and search piped into
+fetch produced record `web:https://yaak.app/`.
+
+Worker version `68a98dea-5d66-482b-abf3-2e8ef8a23244` was probed at
+`01a09daa-1c79-7b91-8275-d3bb1a012f0b`: managed web search returned three web
+records, managed web fetch returned `https://example.com/` with its title, and a
+page past the managed 240 KiB per-source budget was refused with an
+`unsupported` source error naming the budget rather than blaming the upstream.
 
 ## MCP 2025-11-25 tool contracts
 

@@ -414,9 +414,15 @@ fn deserialize_record(
 ) -> Result<Record, EngineError> {
     let bytes = serde_json::to_vec(&data).map_or(usize::MAX, |value| value.len());
     if bytes > limits.max_bytes_per_source {
-        return Err(
-            SourceError::new(source, ErrorClass::Protocol, "fetch byte budget exceeded").into(),
-        );
+        // The source answered correctly; this runtime will not carry a record
+        // that large. Saying `protocol` would blame the upstream for a limit
+        // this deployment chose.
+        return Err(SourceError::new(
+            source,
+            ErrorClass::Unsupported,
+            "fetch byte budget exceeded",
+        )
+        .into());
     }
     let record: Record = serde_json::from_value(data).map_err(|error| {
         SourceError::new(source.clone(), ErrorClass::Protocol, error.to_string())
@@ -428,7 +434,7 @@ fn deserialize_record(
 }
 
 fn budget_error(source: SourceId, message: &'static str) -> SourceError {
-    SourceError::new(source, ErrorClass::Protocol, message)
+    SourceError::new(source, ErrorClass::Unsupported, message)
 }
 
 fn error_class(code: &str) -> ErrorClass {

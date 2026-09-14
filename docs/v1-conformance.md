@@ -4,7 +4,7 @@ Status: in review
 Version: 1.0
 Owner: quality engineer
 Inputs: COMSAT product specification sections 1-79, repository commit 2a43f85e24fcbdbd3fe0850cba8d2bd26a84e2e7, deployed Worker 78d2b084-6993-444e-b561-20295c80503c, GitHub Actions run 34788597060
-Revision: 2026-09-13 follow-up. Findings F1, F3, F4, F5, F7, and F8 are closed with the evidence recorded under each. F2 and F6 remain open and both are blocked on a provider credential the operator must supply.
+Revision: 2026-09-13 follow-up. Findings F1, F2, F3, F4, F5, F7, and F8 are closed with the evidence recorded under each. Only F6 remains open, blocked on a Stack Apps API key the operator must register.
 Governing references: COMSAT PRD v1.0, MCP schema reference 2025-11-25 at https://modelcontextprotocol.io/specification/2025-11-25/schema, repository docs and source cited below
 Scope: This artifact records factual conformance evidence and gaps. It is not an approval request.
 
@@ -12,7 +12,7 @@ Scope: This artifact records factual conformance evidence and gaps. It is not an
 
 ## Quality Gate
 
-Verdict: FAIL for full v1 release. Every finding that engineering can close is closed; the two that remain need provider credentials.
+Verdict: FAIL for full v1 release. Every finding that engineering can close is closed; the one that remains needs a Stack Apps API key.
 
 Phase: quality and validation - partial.
 
@@ -24,7 +24,7 @@ Validation status: FAIL for full v1. COMSAT has a strong 0.1 implementation, but
 
 F1 - CLOSED - MCP 2025-11-25 tool contracts are satisfied. Aggregate output schemas now have object roots and the hosted adapter emits camelCase annotation hints, fixed upstream in Incurs `8b1a6c4` and in the COMSAT schema caller. `xtask/src/cloud_test.rs` asserts the contract against a locally built Worker in every gate run, and deployed Worker `a8b5235f-fef5-4824-a438-5a849f3079be` was probed directly at Apoc receipt `01a09d4b-be83-7392-a7c7-5b3edbea6f87`: every read-only tool advertises `readOnlyHint` with no snake_case keys, every advertised `outputSchema` has an object root with no nested `$schema` and no unresolved local reference, and live MCP and HTTP search and fetch returned `hacker-news:22238335`.
 
-F2 - OPEN, credential-blocked - live web search is still unproven. The web source requires a Brave Search provider key in `COMSAT_BRAVE_API_KEY` (native) or `BRAVE_SEARCH_API_KEY` (managed); no key exists on the build machine or in the Worker secrets. Obtaining one requires creating a Brave Search API account, which is the operator's to create. Everything else about the source is fixture-tested, and a missing key produces a structured authentication error while other sources still return records.
+F2 - CLOSED - live web search and fetch are proven. A Brave Search provider key is configured natively and as the deployed Worker's `BRAVE_SEARCH_API_KEY` secret. Live web search returned `https://yaak.app/` among its results, live web fetch returned that page, and search piped into fetch produced record `web:https://yaak.app/`. A fetched page now carries the document title in the canonical `title` field while its body is preserved untouched as the evidence.
 
 F3 - CLOSED - GitHub coverage includes repositories, repository discussions, and pull-request review discussions. Search selects the object class with `type:repo` and `type:discussion`; fetch resolves repository, issue, pull-request, and discussion targets; follow returns issue comments, a pull request's reviews and review comments, a repository's discussions, and a discussion's comments. Discussions use GitHub's GraphQL API and require a token, which the source reports as a structured authentication error before making any request. Twelve plugin tests cover the paths, and every operation was verified against live GitHub.
 
@@ -45,7 +45,7 @@ Follow-up verification evidence (2026-09-13, after the findings above were addre
 - Deployed Worker `a8b5235f-fef5-4824-a438-5a849f3079be` passed a direct MCP contract and live-retrieval probe: `01a09d4b-be83-7392-a7c7-5b3edbea6f87`.
 - `cargo xtask check` passed on the corrected tree, including `cloud-test` against a locally built Worker and `native-test` covering the durable Code Mode lifecycle and external plugin cancellation.
 - Every new check was mutation-probed: removing local-reference resolution, leaking a cancelled source request, dropping pull-request review traversal, removing the Discussions token guard, and removing rollback compensation each turn the relevant check red.
-- Remaining open findings are F2 and F6; both require a provider credential and neither is reachable from this repository.
+- The one remaining open finding is F6, which requires a Stack Apps API key and is not reachable from this repository.
 
 Verification evidence:
 
@@ -62,7 +62,7 @@ Validation evidence:
 
 - Current docs say 0.1 is implemented and deployed, but do not certify every v1 requirement complete: `docs/acceptance.md:3-5`.
 - Acceptance scenarios A, B, D, E, F, G, and H have evidence in `docs/acceptance.md:9-16`.
-- Scenario C is partial because web live acceptance still needs a provider key: `docs/acceptance.md:11`.
+- Scenario C is live-proven for both GitHub and web: `docs/acceptance.md:11`.
 - Managed deployment is documented at `docs/acceptance.md:31-58`, including Worker, D1, Queue, Cron, final version, and postflight checks.
 
 ## Quality Attributes Checked

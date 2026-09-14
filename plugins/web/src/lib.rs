@@ -87,7 +87,7 @@ impl WebSource {
             "source": SOURCE_ID,
             "kind": "page",
             "url": canonical_url(&url),
-            "title": null,
+            "title": html_title(&text),
             "text": text,
             "author": null,
             "created_at": null,
@@ -239,6 +239,31 @@ fn ensure_limit(limit: Option<u32>) -> Result<(), SourceError> {
         ));
     }
     Ok(())
+}
+
+/// The document title, so a page record fills the canonical field instead of
+/// leaving a consumer to parse markup. The body itself stays untouched: it is
+/// the evidence, and trimming it would decide for the consumer what matters.
+fn html_title(body: &str) -> Option<String> {
+    let lowered = body.to_ascii_lowercase();
+    let open = lowered.find("<title")?;
+    let start = open + lowered[open..].find('>')? + 1;
+    let end = start + lowered[start..].find("</title>")?;
+    let title = decode_entities(body.get(start..end)?.trim());
+    (!title.is_empty()).then_some(title)
+}
+
+/// The named references a title realistically carries. Anything else is left
+/// as written rather than guessed at.
+fn decode_entities(value: &str) -> String {
+    value
+        .replace("&lt;", "<")
+        .replace("&gt;", ">")
+        .replace("&quot;", "\"")
+        .replace("&#39;", "'")
+        .replace("&apos;", "'")
+        .replace("&nbsp;", " ")
+        .replace("&amp;", "&")
 }
 
 fn canonical_url(url: &Url) -> String {

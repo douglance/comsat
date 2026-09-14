@@ -179,3 +179,51 @@ async fn web_source_conforms_with_fixtures() {
     assert!(report.error_checked);
     assert!(report.cancellation_checked);
 }
+
+#[tokio::test]
+async fn web_fetch_fills_the_canonical_title_and_keeps_the_body() {
+    let http = Arc::new(MockHttp::new(vec![
+        r"<!doctype html><html><head><TITLE> Yaak &amp; friends &#39;API&#39; </TITLE></head><body>hello</body></html>",
+    ]));
+    let source: Arc<dyn SourceRuntime> = Arc::new(WebSource::new(http, "key".into()));
+
+    let record = source
+        .fetch(
+            Target::Url {
+                source: SourceId::new("web").unwrap(),
+                url: "https://example.com/page".into(),
+            },
+            SourceRunContext::default(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(record.title.as_deref(), Some("Yaak & friends 'API'"));
+    assert!(
+        record
+            .text
+            .as_deref()
+            .unwrap_or_default()
+            .contains("<body>"),
+        "the body is the evidence and must survive"
+    );
+}
+
+#[tokio::test]
+async fn web_fetch_leaves_the_title_unset_when_the_page_has_none() {
+    let http = Arc::new(MockHttp::new(vec![r#"{"data":"not a document"}"#]));
+    let source: Arc<dyn SourceRuntime> = Arc::new(WebSource::new(http, "key".into()));
+
+    let record = source
+        .fetch(
+            Target::Url {
+                source: SourceId::new("web").unwrap(),
+                url: "https://example.com/data.json".into(),
+            },
+            SourceRunContext::default(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(record.title, None);
+}

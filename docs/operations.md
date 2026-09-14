@@ -119,7 +119,10 @@ POST JSON arguments. History accepts GET query parameters. `/health` also requir
 authentication. MCP protocol negotiation is supplied by the pinned Incurs adapter.
 
 Cloud retrieval permits four active sources and at most 240 KiB of normalized
-records per source per operation. Budget exhaustion is a structured source error.
+records per source per operation. A web page larger than that budget is refused
+with an `unsupported` source error naming the budget, because the source
+answered correctly and the limit belongs to this deployment. The native runtime
+applies no such ceiling and truncates a fetched page at 256 KB instead. Budget exhaustion is a structured source error.
 D1 watch completion accepts at most 1 MiB of serialized record data and uses seven
 transactional SQL statements, or eight with an atomic notification batch. Every
 write is fenced by tenant, run, and lease. Scheduled watch claims are capped at 12

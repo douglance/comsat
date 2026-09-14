@@ -9,12 +9,17 @@ original object so a consumer can inspect the evidence.
 | `github` | Issues and pull requests, repositories (`type:repo`), or discussions (`type:discussion`) | Issue, pull request, repository, or discussion details | Issue comments; a pull request also yields its reviews and review comments; a repository yields its discussions; a discussion yields its comments | `owner/repo`, `owner/repo#number`, `owner/repo/discussions/number` |
 | `hacker-news` | Stories/comments through Algolia's HN search index | Official Firebase item | Direct child comments, fetched progressively | Numeric item ID |
 | `stack-exchange` | Questions on the configured site | Question details | Answers to the question | Numeric question ID on the configured site |
-| `web` | Configured Brave search provider | Public HTTP(S) page content | Unsupported | Absolute URL |
+| `web` | Configured Brave search provider | Public HTTP(S) page content, with the document title in `title` | Unsupported | Absolute URL |
 
 GitHub and Stack Exchange follow operations currently retrieve a bounded page
 of up to 50 related objects. HN follow retrieves up to 50 direct children. Search
 limits are at most 50 for GitHub, HN, and Stack Exchange and 20 for Web; larger
 requests return an explicit error. These limits keep source work bounded.
+
+A fetched web page carries the document title in `title` and the response body,
+truncated at 256 KB, in `text`. The body is preserved as written: it is the
+evidence, and trimming it would decide for the consumer what matters. Managed
+deployments bound the same fetch at 240 KiB; see [operations](operations.md).
 
 The GitHub object class is selected with a `type:` term in the query text:
 `type:repo` searches repositories and `type:discussion` searches discussions.
