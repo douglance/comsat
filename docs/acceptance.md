@@ -30,11 +30,18 @@ the corrected revision completes its own run.
 
 ## Managed deployment
 
-The authenticated service is at <https://comsat-cloud.doug-lance.workers.dev>.
+The authenticated service is at <https://comsat.dev>. `www.comsat.dev` and
+<https://comsat-cloud.doug-lance.workers.dev> serve the same Worker.
 Wrangler profile `doug-lance` selected account
 `88f9cbf5c4f4e217079bcbf0ca6cb181`. D1 database `comsat` is
 `1521142f-6b39-468d-bab0-6879470f17e3`; the Queue is `comsat-watch-runs`.
 Cron runs every five minutes.
+
+On September 14, 2026, custom domains were attached to live version
+`68a98dea-5d66-482b-abf3-2e8ef8a23244` without uploading a new Worker version.
+Unauthenticated `/health` returned 401. Authenticated `/health` returned
+`{"ok":true}`. Authenticated `POST /search` returned record
+`hacker-news:44658227`.
 
 The live acceptance version was `c95059f7-669b-46c3-8c05-b0470ebbcf61`, deployed
 by `01a09cba-2747-7f90-82ef-cbe13e467e5f`. It passed unauthenticated rejection,

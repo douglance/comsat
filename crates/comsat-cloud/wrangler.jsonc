@@ -5,6 +5,10 @@
   "compatibility_date": "2026-09-13",
   "account_id": "88f9cbf5c4f4e217079bcbf0ca6cb181",
   "workers_dev": true,
+  "routes": [
+    { "pattern": "comsat.dev", "custom_domain": true },
+    { "pattern": "www.comsat.dev", "custom_domain": true }
+  ],
   "observability": {
     "enabled": true
   },

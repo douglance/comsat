@@ -186,7 +186,7 @@ Status values:
 | 33 Local Mode | Partial | README states local queries require no COMSAT account, and source docs say local queries are not proxied. This is doc-backed plus acceptance-backed for retrieval, not exhaustive. |
 | 34 Self-Hosted Mode | Partial | SQLite one-process scheduler is implemented and tested. Full MCP/HTTP self-host persistence equivalence is not fully acceptance-tested for all sources. |
 | 35 Managed COMSAT Cloud | Partial | Worker/D1/Queue/Cron are deployed. Commercial operations such as backups and notifications are not live-proven. |
-| 36 Cloud Runtime | Proven | Wrangler config uses Worker, D1, Queue, and Cron in `crates/comsat-cloud/wrangler.jsonc:16-40`. |
+| 36 Cloud Runtime | Proven | Wrangler config uses Worker, D1, Queue, Cron, and `comsat.dev` custom domains in `crates/comsat-cloud/wrangler.jsonc`. |
 | 37 Incurs Cloudflare Integration | Partial | Pinned Incurs adapter is used; modern MCP schema conformance requires upstream work. |
 | 38 Cloudflare Runtime Constraints | Partial | WASM builds and cloud limits are enforced. No production load proof was inspected for the six-connection constraint. |
 | 39 Persistence Model | Partial | Migrations were listed but not line-cited in this audit. |

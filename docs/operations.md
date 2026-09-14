@@ -68,8 +68,10 @@ Reading sources does not create the database or persist results.
 
 The checked-in configuration targets the user's `doug-lance` Cloudflare profile.
 For another account, change `account_id` and create its D1 database and Queue.
-Cloud application code, schema, and deployment configuration use the same MIT
-license as the native implementation.
+The Worker is the origin for `comsat.dev` and `www.comsat.dev`; the
+`workers.dev` hostname remains as a fallback. Cloud application code, schema,
+and deployment configuration use the same MIT license as the native
+implementation.
 
 ```text
 [Cron: find due watches] --claimed work--> [Queue: distribute runs]
@@ -89,6 +91,13 @@ Use the pinned Wrangler version and the named account profile:
 npx --yes wrangler@4.131.1 auth activate doug-lance "$PWD"
 npx --yes wrangler@4.131.1 d1 migrations apply comsat --remote --config crates/comsat-cloud/wrangler.jsonc
 npx --yes wrangler@4.131.1 deploy --config crates/comsat-cloud/wrangler.jsonc --secrets-file "$HOME/.config/comsat/cloud-secrets.json"
+```
+
+Custom domains are declared in `crates/comsat-cloud/wrangler.jsonc`. To attach or
+detach them without uploading a new Worker version:
+
+```sh
+npx --yes wrangler@4.131.1 triggers deploy --config crates/comsat-cloud/wrangler.jsonc
 ```
 
 `worker-build` 0.8.5 must be installed. The build configuration preserves WASM
@@ -161,6 +170,8 @@ Cloudflare's platform metrics; due/leased watch counts are separate measurements
 
 Use Wrangler deployment history and rollback for a Worker regression. Keep the
 database when rolling code back; do not delete observations to repair an execution
-failure. Expired watch leases become claimable again, and run idempotency prevents
-a completed delivery from being committed twice. Obsolete or invalid Queue jobs
-are acknowledged; database failures request a Queue retry.
+failure. Code rollback does not remove custom domains. To detach `comsat.dev`,
+delete the `routes` entries and run `wrangler triggers deploy`. Expired watch
+leases become claimable again, and run idempotency prevents a completed delivery
+from being committed twice. Obsolete or invalid Queue jobs are acknowledged;
+database failures request a Queue retry.
